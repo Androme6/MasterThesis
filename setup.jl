@@ -9,7 +9,7 @@ using LinearAlgebra
 
 const N1 = 45
 const N2 = 5
-const Np = 2
+const Np = 1
 const Nq = 2
 const dims_sys = (N1, N2, Np, Nq)
 
@@ -47,8 +47,6 @@ function H_eff(p::SystemParams)
     H0 = p.ω1 * a1'*a1 + p.ω2 * a2'*a2 + p.ωp * ap'*ap + p.ωq * σz / 2
     Hint_P = (p.g1p * (a1+a1') + p.g2p * (a2+a2')) * (ap+ap')
     
-    anticomm(op1, op2) = op1 * op2 + op2 * op1
-
     g  = [p.g1, p.g2]
     gp = [p.g1p, p.g2p]
     ω  = [p.ω1, p.ω2]
@@ -81,10 +79,10 @@ function H_eff(p::SystemParams)
         # --- 2nd Order: Double index terms ---
         for j in 1:2
             H2 += -cos_t^2 * g[i]*g[j] * B[i] * X[i]*X[j] * σz                # [Sx, Vx] op part
-            H2 += (sin_2t / 2) * (g[i]*g[j] / ω[i]) * anticomm(P[i], X[j]) * σy # [Sz, Vx]
+            H2 += (sin_2t / 2) * (g[i]*g[j] / ω[i]) * commutator(P[i], X[j], anti = true) * σy # [Sz, Vx]
             
             # [Sx, Vz]
-            term_A = -(A[i] / 2) * anticomm(P[i], X[j]) * σy
+            term_A = -(A[i] / 2) * commutator(P[i], X[j], anti = true) * σy
             term_B = B[i] * X[i]*X[j] * σx
             H2 += (sin_2t / 2) * g[i]*g[j] * (term_A + term_B)
         end
@@ -112,28 +110,62 @@ function H_eff(p::SystemParams)
     # --- 3rd Order: Triple Sums ---
     for i in 1:2, j in 1:2, k in 1:2
         # [Sz, [Sz, Vx]] (term 1)
-        H3 += -sin_t * sin_2t * (g[i]*g[j]*g[k] / (ω[i]*ω[k])) * anticomm(P[k], P[i]*X[j]) * σx
+        H3 += -sin_t * sin_2t * (g[i]*g[j]*g[k] / (ω[i]*ω[k])) * commutator(P[k], P[i]*X[j], anti = true) * σx
         
         # [Sz, [Sx, Vz]]
-        term_A_1 = A[i] * anticomm(P[k], P[i]*X[j]) * σx
-        term_B_1 = B[i] * anticomm(P[k], X[i]*X[j]) * σy
+        term_A_1 = A[i] * commutator(P[k], P[i]*X[j], anti = true) * σx
+        term_B_1 = B[i] * commutator(P[k], X[i]*X[j], anti = true) * σy
         term_C_1 = 2im * A[i] * (i == j ? 1.0 : 0.0) * P[k] * σx
         H3 += sin_t * (sin_2t/2) * (g[i]*g[j]*g[k] / ω[k]) * (term_A_1 + term_B_1 + term_C_1)
         
         # [Sx, [Sx, Vx]]
-        term_A_2 = A[k] * anticomm(P[k], X[i]*X[j]) * σy
+        term_A_2 = A[k] * commutator(P[k], X[i]*X[j], anti = true) * σy
         term_B_2 = -2 * B[k] * X[k]*X[i]*X[j] * σx
         H3 += (cos_t^3 / 2) * g[i]*g[j]*g[k] * B[i] * (term_A_2 + term_B_2)
         
         # [Sx, [Sz, Vx]] (term 1)
-        H3 += (cos_t * sin_2t / 2) * (g[i]*g[j]*g[k] / ω[i]) * A[k] * anticomm(P[k], P[i]*X[j]) * σz
+        H3 += (cos_t * sin_2t / 2) * (g[i]*g[j]*g[k] / ω[i]) * A[k] * commutator(P[k], P[i]*X[j], anti = true) * σz
         
         # [Sx, [Sx, Vz]] (term 1)
-        part_a = A[i] * A[k] * anticomm(P[k], P[i]*X[j]) * σz
+        part_a = A[i] * A[k] * commutator(P[k], P[i]*X[j], anti = true) * σz
         part_b = 2 * B[i] * B[k] * X[k]*X[i]*X[j] * σz
         H3 -= (cos_t * sin_2t / 4) * g[i]*g[j]*g[k] * (part_a + part_b)
     end
     H3 *= (1.0 / 3.0) # Apply global 1/3 factor for 3rd order
     
-    return H0 + Hint_P + H2 + H3 + H_filter
+
+    H_raw = H0 + Hint_P + H2 + H3 + H_filter
+    # Enforce strict machine-precision Hermiticity
+    return (H_raw + H_raw') / 2
+end
+
+function H_num(p::SystemParams)
+    H0 = p.ω1 * a1'*a1 + p.ω2 * a2'*a2 + p.ωp * ap'*ap + p.ωq * σz / 2
+    Hint = (p.g1 * (a1+a1') + p.g2 * (a2+a2')) * (sin(p.θ) * σz + cos(p.θ) * σx)
+    Hint_P = (p.g1p * (a1+a1') + p.g2p * (a2+a2')) * (ap+ap')
+
+    S = SW_generator(p)
+    H_1st_filter = commutator(S, Hint_P)
+    H_2nd = 0.5 * commutator(S, Hint)
+    H_3rd = (1.0/3.0) * commutator(S, commutator(S, Hint))
+
+
+    return H0 + Hint_P + H_1st_filter + H_2nd + H_3rd
+end
+
+function SW_generator(p::SystemParams)
+    A1 = 2*p.ω1/(p.ω1^2 - p.ωq^2)
+    A2 = 2*p.ω2/(p.ω2^2 - p.ωq^2)
+    B1 = 2*p.ωq/(p.ω1^2 - p.ωq^2)
+    B2 = 2*p.ωq/(p.ω2^2 - p.ωq^2)
+    Sz = sin(p.θ) * ( 
+    (p.g1 / p.ω1) * (a1'-a1) * σz + 
+    (p.g2 / p.ω2) * (a2'-a2) * σz 
+    )
+    Sx = (1.0 / 2.0) * cos(p.θ) * ( 
+        p.g1 * (A1 * (a1'-a1) * σx - 1im* B1 * (a1'+a1) * σy) + 
+        p.g2 * (A2 * (a2'-a2) * σx - 1im* B2 * (a2'+a2) * σy) 
+    )
+    S = Sz + Sx
+    return S
 end
