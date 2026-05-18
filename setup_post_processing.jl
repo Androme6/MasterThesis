@@ -40,10 +40,10 @@ function extract_memory_state(states_cpu_mats, V_mat, t, t_selected, ωd)
     return rho_mode1_rotated, t_selected_idx
 end
 
-function calculate_wigner(states_cpu_mats, V_mat, t, ωd)
+function calculate_wigner(states_cpu_mats, V_mat, t, t_selected, ωd)
     println("Calculating Wigner function...")
-    tmax = t[end]
-    rho_mode1_rotated, t_selected_idx = extract_memory_state(states_cpu_mats, V_mat, t, tmax, ωd)
+
+    rho_mode1_rotated, t_selected_idx = extract_memory_state(states_cpu_mats, V_mat, t, t_selected, ωd)
     
     xvec = LinRange(-5, 5, 100)
     yvec = LinRange(-5, 5, 100)
@@ -113,9 +113,9 @@ end
 
 
 # Main function to run analysis and generate plots
-function analysis_and_plots(states_cpu_mats, V_mat, t, params, expect_n1, expect_n2, expect_np, ωd, F, kp, save_dir, filename)
+function analysis_and_plots(states_cpu_mats, V_mat, t, t_selected, params, expect_n1, expect_n2, expect_np, ωd, F, kp, save_dir, filename)
     # Calculate Wigner
-    rho_mode1_rotated, W_cat, xvec, yvec, t_selected_idx = calculate_wigner(states_cpu_mats, V_mat, t, ωd)
+    rho_mode1_rotated, W_cat, xvec, yvec, t_selected_idx = calculate_wigner(states_cpu_mats, V_mat, t, t_selected, ωd)
     
     # Generate and Save Plots
     fig_master = plotting(t, expect_n1, expect_n2, expect_np, rho_mode1_rotated, W_cat, xvec, yvec, t_selected_idx, save_dir, filename)

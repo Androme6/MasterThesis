@@ -19,6 +19,7 @@ params = SystemParams(
 F = 0.025
 kp = 0.1 
 tmax = 5#15000
+t_selected = tmax
 nframes = 5#500
 H_fun = H_full
 
@@ -36,6 +37,7 @@ upper_index_p = 5
 results = get_optimal_frequency(H_fun, params, ω2_list, ωp_list, lower_index_2, upper_index_2, lower_index_p, upper_index_p)
 println("Optimal ω2 = ", round(results[1], digits=6))
 println("ω2 dressed = ", round(results[2], digits=6))
+display(results[5])
 params.ω2 = results[1]
 params.g1p = params.g2p * sqrt(params.ω1) / sqrt(params.ω2)
 ωd = results[2]

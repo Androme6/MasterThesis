@@ -9,7 +9,7 @@ using LinearAlgebra
 
 const N1 = 45
 const N2 = 5
-const Np = 1
+const Np = 2
 const Nq = 2
 const dims_sys = (N1, N2, Np, Nq)
 
