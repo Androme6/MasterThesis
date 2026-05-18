@@ -21,25 +21,18 @@ kp = 0.1
 tmax = 5#15000
 t_selected = tmax
 nframes = 5#500
-H_fun = H_full
+H_fun = H_eff
 
 save_dir = "C:\\Users\\andre\\Desktop\\Università\\Magistrale\\MA4\\Thesis\\Code\\MasterThesis\\Output"
 filename = "Three_modes_full"
 matrix_form = Val(true)
 
 # 2. Find optimal frequencies
-ω2_list = range(1.9 * params.ω1, 2.1 * params.ω1, length=300)
-ωp_list = range(1.7 * params.ω1, 2.2 * params.ω1, length=300)
-lower_index_2 = 3
-upper_index_2 = 4
-lower_index_p = 3
-upper_index_p = 5
 results = get_optimal_frequency(H_fun, params, ω2_list, ωp_list, lower_index_2, upper_index_2, lower_index_p, upper_index_p)
 println("Optimal ω2 = ", round(results[1], digits=6))
 println("ω2 dressed = ", round(results[2], digits=6))
 display(results[5])
-params.ω2 = results[1]
-params.g1p = params.g2p * sqrt(params.ω1) / sqrt(params.ω2)
+params = deepcopy(results[9])
 ωd = results[2]
 
 H = H_fun(params)

@@ -11,12 +11,6 @@ params = SystemParams(
     g2p = 0, #0.02,
     θ = π / 6.0
 )
-ω2_list = range(1.9 * params.ω1, 2.1 * params.ω1, length=300)
-ωp_list = range(1.7 * params.ω1, 2.2 * params.ω1, length=300)
-lower_index_2 = 3
-upper_index_2 = 4
-lower_index_p = 3
-upper_index_p = 5
 
 results = get_optimal_frequency(H_full, params, ω2_list, ωp_list, lower_index_2, upper_index_2, lower_index_p, upper_index_p)
 println("Optimal ω2 = ", round(results[1], digits=6))

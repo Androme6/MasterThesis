@@ -51,5 +51,17 @@ function get_optimal_frequency(H_fun, p, ω2_list, ωp_list, lower_index_2, uppe
     ωp_opt = ωp_list[idx_opt_p]
     ωp_dressed = real(eigenvalues_vs_p[upper_index_p, 1] - eigenvalues_vs_p[1, 1])
 
-    return ω2_opt, ω2_dressed, ωp_opt, ωp_dressed, fig2, figp, gap, gap_p
+    p_new = deepcopy(p)
+    p_new.ω2 = ω2_opt
+    #p_new.ωp = ωp_opt
+    #p_new.g1p = p_new.g2p * sqrt(p_new.ω1) / sqrt(p_new.ω2)
+
+    return ω2_opt, ω2_dressed, ωp_opt, ωp_dressed, fig2, figp, gap, gap_p, p_new
 end
+
+ω2_list = range(1.9 * params.ω1, 2.1 * params.ω1, length=300)
+ωp_list = range(1.7 * params.ω1, 2.2 * params.ω1, length=300)
+lower_index_2 = 3
+upper_index_2 = 4
+lower_index_p = 3
+upper_index_p = 5

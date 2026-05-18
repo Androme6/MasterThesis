@@ -76,28 +76,12 @@ tmax = 1000
 steps = 200
 t = LinRange(0, tmax, steps)
 
-ω2_list = range(1.9 * params.ω1, 2.1 * params.ω1, length=300)
-ωp_list = range(1.7 * params.ω1, 2.2 * params.ω1, length=300)
-lower_index_2 = 3
-upper_index_2 = 4
-lower_index_p = 3
-upper_index_p = 5
-
-
 results_full = get_optimal_frequency(H_full, params, ω2_list, ωp_list, lower_index_2, upper_index_2, lower_index_p, upper_index_p)
 results_eff = get_optimal_frequency(H_eff, params, ω2_list, ωp_list, lower_index_2, upper_index_2, lower_index_p, upper_index_p)
 
 
-params_full = deepcopy(params)
-params_full.ω2 = results_full[1]
-params_full.ωp = results_full[3] 
-
-params_eff = deepcopy(params)
-params_eff.ω2 = results_eff[1]
-params_eff.ωp = results_eff[3]   
-
-sol_3WM, sol_filter, fig_3wm, fig_filter = Rabi_Oscillations(H_full, t, params_full)
-sol_3WM_eff, sol_filter_eff, fig_3wm_eff, fig_filter_eff = Rabi_Oscillations(H_eff, t, params_eff)
+sol_3WM, sol_filter, fig_3wm, fig_filter = Rabi_Oscillations(H_full, t, results_full[9])
+sol_3WM_eff, sol_filter_eff, fig_3wm_eff, fig_filter_eff = Rabi_Oscillations(H_eff, t, results_eff[9])
 display(fig_3wm)
 display(fig_filter)
 display(fig_3wm_eff)
