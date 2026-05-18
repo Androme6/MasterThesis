@@ -70,7 +70,7 @@ function H_eff(p::SystemParams)
         # --- Filter (1st Order) ---
         term_z_f = -2.0 * sin_t * (g[i] * gp[i] / ω[i]) * XP * σz
         term_x_f = -cos_t * g[i] * gp[i] * A[i] * XP * σx
-        H_filter += 0.5 * (term_z_f + term_x_f) 
+        H_filter += term_z_f + term_x_f 
         
         # --- 2nd Order: Single index terms ---
         H2 += -2 * sin_t^2 * (g[i]^2 / ω[i]) * Id           # [Sz, Vz]
