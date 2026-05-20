@@ -7,8 +7,8 @@ using Dates
 using JLD2
 using LinearAlgebra
 
-const N1 = 45
-const N2 = 5
+const N1 = 20
+const N2 = 4
 const Np = 1
 const Nq = 2
 const dims_sys = (N1, N2, Np, Nq)

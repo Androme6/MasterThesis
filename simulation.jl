@@ -18,16 +18,17 @@ params = SystemParams(
 
 F = 0.025
 kp = 0.1 
-tmax = 5#15000
+tmax = 15000
 t_selected = tmax
-nframes = 5#500
+nframes = 500
 
 ###########
 H_fun = H_eff
 filename = "Three_modes_eff"
 ###########
 
-save_dir = "C:\\Users\\andre\\Desktop\\Università\\Magistrale\\MA4\\Thesis\\Code\\MasterThesis\\Output"
+#save_dir = "C:\\Users\\andre\\Desktop\\Università\\Magistrale\\MA4\\Thesis\\Code\\MasterThesis\\Output"
+save_dir = "/capstor/store/cscs/2go/go072/alanteri"
 mkpath(save_dir)
 
 matrix_form = Val(true)

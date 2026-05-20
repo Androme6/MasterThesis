@@ -16,4 +16,4 @@ cd ~/MasterThesis
 
 julia --project="." -e 'using Pkg; Pkg.instantiate()'
 
-JULIA_NUM_THREADS=16 julia --project="." simulation_cluster.jl
+JULIA_NUM_THREADS=16 julia --project="." simulation.jl
