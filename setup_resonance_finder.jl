@@ -3,7 +3,10 @@ using CairoMakie
 using ProgressMeter
 using LaTeXStrings
 
-function get_optimal_frequency(H_fun, p, ω2_list, ωp_list, lower_index_2, upper_index_2, lower_index_p, upper_index_p)
+function get_optimal_frequency(H_fun, p, ω2_lower_bound = 1.9, ω2_upper_bound = 2.1, ωp_lower_bound = 1.7, ωp_upper_bound = 2.2, lower_index_2 = 3, upper_index_2 = 4, lower_index_p = 3, upper_index_p = 5)
+    ω2_list = range(ω2_lower_bound * p.ω1, ω2_upper_bound * p.ω1, length=300)
+    ωp_list = range(ωp_lower_bound * p.ω1, ωp_upper_bound * p.ω1, length=300)
+       
     #ω2 part
     #ωp = 2.0*p.ω1 + 10.0*p.g2p
     #p.ωp = ωp
@@ -58,10 +61,3 @@ function get_optimal_frequency(H_fun, p, ω2_list, ωp_list, lower_index_2, uppe
 
     return ω2_opt, ω2_dressed, ωp_opt, ωp_dressed, fig2, figp, gap, gap_p, p_new
 end
-
-ω2_list = range(1.9 * params.ω1, 2.1 * params.ω1, length=300)
-ωp_list = range(1.7 * params.ω1, 2.2 * params.ω1, length=300)
-lower_index_2 = 3
-upper_index_2 = 4
-lower_index_p = 3
-upper_index_p = 5
