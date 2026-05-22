@@ -9,22 +9,22 @@ params = SystemParams(
     ω1 = 1.0, 
     ω2 = 2.0, 
     ωp = 0.0, 
-    ωq = 2.5, 
-    g1 = 0.1, 
-    g2 = 0.2,   
+    ωq = 3.0, 
+    g1 = 0.08, 
+    g2 = 2*0.08,   
     g2p = 0, 
     θ = π / 6.0
 )
 
-F = 0.025
+F = 0.005
 kp = 0.1 
-tmax = 15000
+tmax = 300000
 t_selected = tmax
 nframes = 500
 
 ###########
-H_fun = H_eff
-filename = "Three_modes_eff"
+H_fun = H_num
+filename = "Three_modes_num"
 ###########
 
 #save_dir = "C:\\Users\\andre\\Desktop\\Università\\Magistrale\\MA4\\Thesis\\Code\\MasterThesis\\Output"
@@ -48,7 +48,11 @@ S = SW_generator(params)
 # 3. Jump Operators (now on Buffer)
 #field = 1im * sqrt(kp / params.ωp) * (ap - ap')
 field_pre_trans = 1im * sqrt(kp / params.ω2) * (a2 - a2') #for now
-field_post_trans = field_pre_trans  + commutator(S, field_pre_trans) + 0.5 * commutator(S, commutator(S, field_pre_trans))
+f1 = commutator(S, field_pre_trans)
+f2 = commutator(S, f1)
+f3 = commutator(S, f2)
+f4 = commutator(S, f3)
+field_post_trans = field_pre_trans + f1 + (1.0/2.0)*f2 + (1.0/6.0)*f3 + (1.0/24.0)*f4
 fields = (field_post_trans,) 
 T_baths = (0.0,)
 
@@ -62,7 +66,11 @@ L_gpu = Adapt.adapt(CUSPARSE.CuSparseMatrixCSR, L_cpu)
 # 5. Drive Hamiltonian (now on Buffer)
 #H_drive_bare = 1im * F * (ap - ap')
 H_drive_bare_pre_trans = 1im * F * (a2 - a2') #for now
-H_drive_bare_post_trans = H_drive_bare_pre_trans + commutator(S, H_drive_bare_pre_trans) + 0.5 * commutator(S, commutator(S, H_drive_bare_pre_trans))
+d1 = commutator(S, H_drive_bare_pre_trans)
+d2 = commutator(S, d1)
+d3 = commutator(S, d2)
+d4 = commutator(S, d3)
+H_drive_bare_post_trans = H_drive_bare_pre_trans + d1 + (1.0/2.0)*d2 + (1.0/6.0)*d3 + (1.0/24.0)*d4
 H_drive_dressed_dense = V_mat' * Array(H_drive_bare_post_trans.data) * V_mat
 H_drive_dressed_sparse = droptol!(sparse(H_drive_dressed_dense), 1e-12)
 H_drive_dressed_qobj = QuantumObject(H_drive_dressed_sparse, type=Operator(), dims=dims_sys)
