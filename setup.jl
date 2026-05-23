@@ -13,16 +13,34 @@ const Np = 1
 const Nq = 2
 const dims_sys = (N1, N2, Np, Nq)
 
-const a1 = tensor(destroy(N1), qeye(N2), qeye(Np), qeye(Nq))
-const a2 = tensor(qeye(N1), destroy(N2), qeye(Np), qeye(Nq))
-const ap = tensor(qeye(N1), qeye(N2), destroy(Np), qeye(Nq))
-const n1 = tensor(num(N1), qeye(N2), qeye(Np), qeye(Nq))
-const n2 = tensor(qeye(N1), num(N2), qeye(Np), qeye(Nq))
-const np = tensor(qeye(N1), qeye(N2), num(Np), qeye(Nq))
-const σz = tensor(qeye(N1), qeye(N2), qeye(Np), sigmaz())
-const σy = tensor(qeye(N1), qeye(N2), qeye(Np), sigmay())
-const σx = tensor(qeye(N1), qeye(N2), qeye(Np), sigmax())
-const Id = tensor(qeye(N1), qeye(N2), qeye(Np), qeye(Nq))
+const a1 = QuantumToolbox.tensor(destroy(N1), qeye(N2), qeye(Np), qeye(Nq))
+const a2 = QuantumToolbox.tensor(qeye(N1), destroy(N2), qeye(Np), qeye(Nq))
+const ap = QuantumToolbox.tensor(qeye(N1), qeye(N2), destroy(Np), qeye(Nq))
+const n1 = QuantumToolbox.tensor(num(N1), qeye(N2), qeye(Np), qeye(Nq))
+const n2 = QuantumToolbox.tensor(qeye(N1), num(N2), qeye(Np), qeye(Nq))
+const np = QuantumToolbox.tensor(qeye(N1), qeye(N2), num(Np), qeye(Nq))
+const σz = QuantumToolbox.tensor(qeye(N1), qeye(N2), qeye(Np), sigmaz())
+const σy = QuantumToolbox.tensor(qeye(N1), qeye(N2), qeye(Np), sigmay())
+const σx = QuantumToolbox.tensor(qeye(N1), qeye(N2), qeye(Np), sigmax())
+const Id = QuantumToolbox.tensor(qeye(N1), qeye(N2), qeye(Np), qeye(Nq))
+
+const N1_ext = N1 + 1
+const N2_ext = N2 + 1
+    
+const a1_ext = QuantumToolbox.tensor(destroy(N1_ext), qeye(N2_ext), qeye(Np), qeye(Nq))
+const a2_ext = QuantumToolbox.tensor(qeye(N1_ext), destroy(N2_ext), qeye(Np), qeye(Nq))
+const ap_ext = QuantumToolbox.tensor(qeye(N1_ext), qeye(N2_ext), destroy(Np), qeye(Nq))
+const σz_ext = QuantumToolbox.tensor(qeye(N1_ext), qeye(N2_ext), qeye(Np), sigmaz())
+const σy_ext = QuantumToolbox.tensor(qeye(N1_ext), qeye(N2_ext), qeye(Np), sigmay())
+const σx_ext = QuantumToolbox.tensor(qeye(N1_ext), qeye(N2_ext), qeye(Np), sigmax())
+const Id_ext = QuantumToolbox.tensor(qeye(N1_ext), qeye(N2_ext), qeye(Np), qeye(Nq))
+
+const P1_mat = sparse(I, N1, N1_ext)
+const P2_mat = sparse(I, N2, N2_ext)
+const Ip_mat = sparse(I, Np, Np)
+const Iq_mat = sparse(I, Nq, Nq)
+const P_full_mat = kron(P1_mat, kron(P2_mat, kron(Ip_mat, Iq_mat)))
+
 
 @kwdef mutable struct SystemParams
     ω1::Float64 
@@ -44,17 +62,6 @@ function H_full(p::SystemParams)
 end
 
 function H_eff(p::SystemParams)
-    N1_ext = N1 + 1
-    N2_ext = N2 + 1
-    
-    a1_ext = tensor(destroy(N1_ext), qeye(N2_ext), qeye(Np), qeye(Nq))
-    a2_ext = tensor(qeye(N1_ext), destroy(N2_ext), qeye(Np), qeye(Nq))
-    ap_ext = tensor(qeye(N1_ext), qeye(N2_ext), destroy(Np), qeye(Nq))
-    σz_ext = tensor(qeye(N1_ext), qeye(N2_ext), qeye(Np), sigmaz())
-    σy_ext = tensor(qeye(N1_ext), qeye(N2_ext), qeye(Np), sigmay())
-    σx_ext = tensor(qeye(N1_ext), qeye(N2_ext), qeye(Np), sigmax())
-    Id_ext = tensor(qeye(N1_ext), qeye(N2_ext), qeye(Np), qeye(Nq))
-
     H0 = p.ω1 * a1_ext'*a1_ext + p.ω2 * a2_ext'*a2_ext + p.ωp * ap_ext'*ap_ext + p.ωq * σz_ext / 2
     Hint_P = (p.g1p * (a1_ext+a1_ext') + p.g2p * (a2_ext+a2_ext')) * (ap_ext+ap_ext')
     
@@ -89,10 +96,10 @@ function H_eff(p::SystemParams)
         # --- 2nd Order: Double index terms ---
         for j in 1:2
             H2 += -cos_t^2 * g[i]*g[j] * B[i] * X[i]*X[j] * σz_ext                # [Sx, Vx] op part
-            H2 += (sin_2t / 2) * (g[i]*g[j] / ω[i]) * commutator(P[i], X[j], anti = true) * σy_ext # [Sz, Vx]
+            H2 += (sin_2t / 2) * (g[i]*g[j] / ω[i]) * QuantumToolbox.commutator(P[i], X[j], anti = true) * σy_ext # [Sz, Vx]
             
             # [Sx, Vz]
-            term_A = -(A[i] / 2) * commutator(P[i], X[j], anti = true) * σy_ext
+            term_A = -(A[i] / 2) * QuantumToolbox.commutator(P[i], X[j], anti = true) * σy_ext
             term_B = B[i] * X[i]*X[j] * σx_ext
             H2 += (sin_2t / 2) * g[i]*g[j] * (term_A + term_B)
         end
@@ -120,48 +127,41 @@ function H_eff(p::SystemParams)
     # --- 3rd Order: Triple Sums ---
     for i in 1:2, j in 1:2, k in 1:2
         # [Sz, [Sz, Vx]] (term 1)
-        H3 += -sin_t * sin_2t * (g[i]*g[j]*g[k] / (ω[i]*ω[k])) * commutator(P[k], P[i]*X[j], anti = true) * σx_ext
+        H3 += -sin_t * sin_2t * (g[i]*g[j]*g[k] / (ω[i]*ω[k])) * QuantumToolbox.commutator(P[k], P[i]*X[j], anti = true) * σx_ext
         
         # [Sz, [Sx, Vz]]
-        term_A_1 = A[i] * commutator(P[k], P[i]*X[j], anti = true) * σx_ext
-        term_B_1 = B[i] * commutator(P[k], X[i]*X[j], anti = true) * σy_ext
+        term_A_1 = A[i] * QuantumToolbox.commutator(P[k], P[i]*X[j], anti = true) * σx_ext
+        term_B_1 = B[i] * QuantumToolbox.commutator(P[k], X[i]*X[j], anti = true) * σy_ext
         term_C_1 = 2im * A[i] * (i == j ? 1.0 : 0.0) * P[k] * σx_ext
         H3 += sin_t * (sin_2t/2) * (g[i]*g[j]*g[k] / ω[k]) * (term_A_1 + term_B_1 + term_C_1)
         
         # [Sx, [Sx, Vx]]
-        term_A_2 = A[k] * commutator(P[k], X[i]*X[j], anti = true) * σy_ext
+        term_A_2 = A[k] * QuantumToolbox.commutator(P[k], X[i]*X[j], anti = true) * σy_ext
         term_B_2 = -2 * B[k] * X[k]*X[i]*X[j] * σx_ext
         H3 += (cos_t^3 / 2) * g[i]*g[j]*g[k] * B[i] * (term_A_2 + term_B_2)
         
         # [Sx, [Sz, Vx]] (term 1)
-        H3 += (cos_t * sin_2t / 2) * (g[i]*g[j]*g[k] / ω[i]) * A[k] * commutator(P[k], P[i]*X[j], anti = true) * σz_ext
+        H3 += (cos_t * sin_2t / 2) * (g[i]*g[j]*g[k] / ω[i]) * A[k] * QuantumToolbox.commutator(P[k], P[i]*X[j], anti = true) * σz_ext
         
         # [Sx, [Sx, Vz]] (term 1)
-        part_a = A[i] * A[k] * commutator(P[k], P[i]*X[j], anti = true) * σz_ext
+        part_a = A[i] * A[k] * QuantumToolbox.commutator(P[k], P[i]*X[j], anti = true) * σz_ext
         part_b = 2 * B[i] * B[k] * X[k]*X[i]*X[j] * σz_ext
         H3 -= (cos_t * sin_2t / 4) * g[i]*g[j]*g[k] * (part_a + part_b)
     end
     H3 *= (1.0 / 3.0) 
 
     H_ext = H0 + Hint_P + H2 + H3 + H_filter
-
-    P1_mat = sparse(I, N1, N1_ext)
-    P2_mat = sparse(I, N2, N2_ext)
-    Ip_mat = sparse(I, Np, Np)
-    Iq_mat = sparse(I, Nq, Nq)
-    
-    P_full_mat = kron(P1_mat, kron(P2_mat, kron(Ip_mat, Iq_mat)))
     H_sub_mat = P_full_mat * H_ext.data * P_full_mat'
-    
     H_sub = QuantumObject(H_sub_mat, type=Operator(), dims=dims_sys)
     
     return H_sub 
 end
 
 function H_num(p::SystemParams)
-    H0 = p.ω1 * a1'*a1 + p.ω2 * a2'*a2 + p.ωp * ap'*ap + p.ωq * σz / 2
-    Hint = (p.g1 * (a1+a1') + p.g2 * (a2+a2')) * (sin(p.θ) * σz + cos(p.θ) * σx)
-    Hint_P = (p.g1p * (a1+a1') + p.g2p * (a2+a2')) * (ap+ap')
+    H0 = p.ω1 * a1_ext'*a1_ext + p.ω2 * a2_ext'*a2_ext + p.ωp * ap_ext'*ap_ext + p.ωq * σz_ext / 2
+    Hint_P = (p.g1p * (a1_ext+a1_ext') + p.g2p * (a2_ext+a2_ext')) * (ap_ext+ap_ext')
+    Hint = (p.g1 * (a1_ext+a1_ext') + p.g2 * (a2_ext+a2_ext')) * (sin(p.θ) * σz_ext + cos(p.θ) * σx_ext)
+    
 
     S = SW_generator(p)
     H_1st_filter = commutator(S, Hint_P)
@@ -171,8 +171,11 @@ function H_num(p::SystemParams)
     H_4th = (1.0/8.0) * commutator(S, commutator(S, commutator(S, Hint)))  
     H_2nd_filter = 0.5 * commutator(S, H_1st_filter)
 
+    H_ext = H0 + Hint_P + H_1st_filter + H_2nd + H_3rd + H_4th + H_2nd_filter
+    H_sub_mat = P_full_mat * H_ext.data * P_full_mat'
+    H_sub = QuantumObject(H_sub_mat, type=Operator(), dims=dims_sys)
     
-    return H0 + Hint_P + H_1st_filter + H_2nd + H_3rd   + H_4th + H_2nd_filter
+    return H_sub
 end
 
 function SW_generator(p::SystemParams)
@@ -181,12 +184,12 @@ function SW_generator(p::SystemParams)
     B1 = 2*p.ωq/(p.ω1^2 - p.ωq^2)
     B2 = 2*p.ωq/(p.ω2^2 - p.ωq^2)
     Sz = sin(p.θ) * ( 
-    (p.g1 / p.ω1) * (a1'-a1) * σz + 
-    (p.g2 / p.ω2) * (a2'-a2) * σz 
+    (p.g1 / p.ω1) * (a1_ext'-a1_ext) * σz_ext + 
+    (p.g2 / p.ω2) * (a2_ext'-a2_ext) * σz_ext 
     )
     Sx = (1.0 / 2.0) * cos(p.θ) * ( 
-        p.g1 * (A1 * (a1'-a1) * σx - 1im* B1 * (a1'+a1) * σy) + 
-        p.g2 * (A2 * (a2'-a2) * σx - 1im* B2 * (a2'+a2) * σy) 
+        p.g1 * (A1 * (a1_ext'-a1_ext) * σx_ext - 1im* B1 * (a1_ext'+a1_ext) * σy_ext) + 
+        p.g2 * (A2 * (a2_ext'-a2_ext) * σx_ext - 1im* B2 * (a2_ext'+a2_ext) * σy_ext) 
     )
     S = Sz + Sx
     return S
