@@ -9,22 +9,22 @@ params = SystemParams(
     ω1 = 1.0, 
     ω2 = 2.0, 
     ωp = 0.0, 
-    ωq = 3.0, 
-    g1 = 0.08, 
-    g2 = 2*0.08,   
+    ωq = 2.5, 
+    g1 = 0.1, 
+    g2 = 0.2,   
     g2p = 0, 
     θ = π / 6.0
 )
 
-F = 0.005
+F = 0.025
 kp = 0.1 
-tmax = 300000
+tmax = 15000
 t_selected = tmax
 nframes = 500
 
 ###########
-H_fun = H_num
-filename = "Three_modes_num"
+H_fun = H_full
+filename = "Three_modes_full"
 ###########
 
 #save_dir = "C:\\Users\\andre\\Desktop\\Università\\Magistrale\\MA4\\Thesis\\Code\\MasterThesis\\Output"
@@ -41,19 +41,46 @@ display(results[5])
 params = deepcopy(results[9])
 ωd = results[2]
 
-H = H_fun(params)
-S = SW_generator(params) 
-#S = 0.0 * Id #for testing only
+flush(stdout)
 
-# 3. Jump Operators (now on Buffer)
-#field = 1im * sqrt(kp / params.ωp) * (ap - ap')
-field_pre_trans = 1im * sqrt(kp / params.ω2) * (a2 - a2') #for now
-f1 = commutator(S, field_pre_trans)
-f2 = commutator(S, f1)
-f3 = commutator(S, f2)
-f4 = commutator(S, f3)
-field_post_trans = field_pre_trans + f1 + (1.0/2.0)*f2 + (1.0/6.0)*f3 + (1.0/24.0)*f4
-fields = (field_post_trans,) 
+H = H_fun(params)
+is_effective_model = (H_fun != H_full)
+
+field_pretransf_ext = 1im * sqrt(kp / params.ω2) * (a2_ext - a2_ext') 
+H_drive_pretransf_ext = 1im * F * (a2_ext - a2_ext')
+
+if is_effective_model
+    println("Applying SW transformation to drive and fields...")
+    S = SW_generator(params)
+    
+    # Transform Field
+    f1 = commutator(S, field_pretransf_ext)
+    f2 = commutator(S, f1)
+    f3 = commutator(S, f2)
+    f4 = commutator(S, f3)
+    field_trans_ext = field_pretransf_ext + f1 + (1.0/2.0)*f2 + (1.0/6.0)*f3 + (1.0/24.0)*f4
+    
+    # Transform Drive
+    d1 = commutator(S, H_drive_pretransf_ext)
+    d2 = commutator(S, d1)
+    d3 = commutator(S, d2)
+    d4 = commutator(S, d3)
+    H_drive_trans_ext = H_drive_pretransf_ext + d1 + (1.0/2.0)*d2 + (1.0/6.0)*d3 + (1.0/24.0)*d4
+    
+    # project down to target space
+    field_final_mat = P_full_mat * field_trans_ext.data * P_full_mat'
+    H_drive_final_mat = P_full_mat * H_drive_trans_ext.data * P_full_mat'
+else
+    println("Using bare drive and fields for H_full...")
+    # Just project the bare operators down to target space
+    field_final_mat = P_full_mat * field_pretransf_ext.data * P_full_mat'
+    H_drive_final_mat = P_full_mat * H_drive_pretransf_ext.data * P_full_mat'
+end
+
+field_op = QuantumObject(field_final_mat, type=Operator(), dims=dims_sys)
+H_drive_op = QuantumObject(H_drive_final_mat, type=Operator(), dims=dims_sys)
+
+fields = (field_op,) 
 T_baths = (0.0,)
 
 # 4. Dressed Liouvillian
@@ -64,14 +91,7 @@ println("Transferring Liouvillian to GPU...")
 L_gpu = Adapt.adapt(CUSPARSE.CuSparseMatrixCSR, L_cpu)
 
 # 5. Drive Hamiltonian (now on Buffer)
-#H_drive_bare = 1im * F * (ap - ap')
-H_drive_bare_pre_trans = 1im * F * (a2 - a2') #for now
-d1 = commutator(S, H_drive_bare_pre_trans)
-d2 = commutator(S, d1)
-d3 = commutator(S, d2)
-d4 = commutator(S, d3)
-H_drive_bare_post_trans = H_drive_bare_pre_trans + d1 + (1.0/2.0)*d2 + (1.0/6.0)*d3 + (1.0/24.0)*d4
-H_drive_dressed_dense = V_mat' * Array(H_drive_bare_post_trans.data) * V_mat
+H_drive_dressed_dense = V_mat' * Array(H_drive_op.data) * V_mat
 H_drive_dressed_sparse = droptol!(sparse(H_drive_dressed_dense), 1e-12)
 H_drive_dressed_qobj = QuantumObject(H_drive_dressed_sparse, type=Operator(), dims=dims_sys)
 L_drive_dressed_cpu = liouvillian(H_drive_dressed_qobj; matrix_form = matrix_form)
