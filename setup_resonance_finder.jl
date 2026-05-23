@@ -60,9 +60,10 @@ function get_optimal_frequency(H_fun, p, ω2_lower_bound = 1.9, ω2_upper_bound 
     gap_p, idx_opt_p = findmin(real, eigenvalues_vs_p[upper_index_p, :] - eigenvalues_vs_p[lower_index_p, :])
     ωp_opt = ωp_list[idx_opt_p]
     ωp_dressed = real(eigenvalues_vs_p[upper_index_p, 1] - eigenvalues_vs_p[1, 1])
-=#
+    =#
     p_new = deepcopy(p)
     p_new.ω2 = ω2_opt
+    p_new.ωd = ω2_dressed
     #p_new.ωp = ωp_opt
     #p_new.g1p = p_new.g2p * sqrt(p_new.ω1) / sqrt(p_new.ω2)
     

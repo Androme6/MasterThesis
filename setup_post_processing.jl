@@ -91,14 +91,14 @@ function plotting(t, expect_n1, expect_n2, expect_np, rho_mode1_rotated, W_cat, 
     return fig_master
 end
 
-function text_summary(params, expect_n1, expect_n2, expect_np, ωd, F, kp, save_dir, filename)
+function text_summary(params, expect_n1, expect_n2, expect_np, F, kp, save_dir, filename)
     println("Saving text logs...")
     summary_text = """
     --- System Parameters ---
     ω1 = $(params.ω1) | ω2 = $(params.ω2) | ωp = $(params.ωp) | ωq  = $(params.ωq)
     g1 = $(params.g1) | g2 = $(params.g2) | g1p = $(params.g1p) | g2p = $(params.g2p)
     θ    = $(round(params.θ, digits=3))
-    κp  = $(kp) | F = $(F) | ωd  = $(round(ωd, digits=5))
+    κp  = $(kp) | F = $(F) | ωd  = $(params.ωd)
 
     Observables:
     Final ⟨n1⟩ = $(round(expect_n1[end], digits=4))
@@ -114,14 +114,14 @@ end
 
 
 # Main function to run analysis and generate plots
-function analysis_and_plots(states_cpu_mats, V_mat, t, t_selected, params, expect_n1, expect_n2, expect_np, ωd, F, kp, save_dir, filename, is_RWA)
+function analysis_and_plots(states_cpu_mats, V_mat, t, t_selected, params, expect_n1, expect_n2, expect_np, F, kp, save_dir, filename, is_RWA)
     # Calculate Wigner
-    rho_mode1_rotated, W_cat, xvec, yvec, t_selected_idx = calculate_wigner(states_cpu_mats, V_mat, t, t_selected, ωd, is_RWA)
+    rho_mode1_rotated, W_cat, xvec, yvec, t_selected_idx = calculate_wigner(states_cpu_mats, V_mat, t, t_selected, params.ωd, is_RWA)
     
     # Generate and Save Plots
     fig_master = plotting(t, expect_n1, expect_n2, expect_np, rho_mode1_rotated, W_cat, xvec, yvec, t_selected_idx, save_dir, filename)
     
     # Generate and Save Text Logs
-    text_summary(params, expect_n1, expect_n2, expect_np, ωd, F, kp, save_dir, filename)
+    text_summary(params, expect_n1, expect_n2, expect_np, F, kp, save_dir, filename)
     return fig_master
 end

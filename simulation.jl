@@ -13,7 +13,8 @@ params = SystemParams(
     g1 = 0.1, 
     g2 = 0.2,   
     g2p = 0, 
-    θ = π / 6.0
+    θ = π / 6.0,
+    ωd = 0.0
 )
 
 F = 0.025
@@ -23,12 +24,12 @@ t_selected = tmax
 nframes = 500
 
 ###########
-H_fun = H_full
+H_fun = H_eff_4th_order_RWA
 filename = "Three_modes_full"
 ###########
 
-#save_dir = "C:\\Users\\andre\\Desktop\\Università\\Magistrale\\MA4\\Thesis\\Code\\MasterThesis\\Output"
-save_dir = "/capstor/store/cscs/2go/go072/alanteri"
+save_dir = "C:\\Users\\andre\\Desktop\\Università\\Magistrale\\MA4\\Thesis\\Code\\MasterThesis\\Output"
+#save_dir = "/capstor/store/cscs/2go/go072/alanteri"
 mkpath(save_dir)
 
 matrix_form = Val(true)
@@ -39,7 +40,6 @@ println("Optimal ω2 = ", round(results[1], digits=6))
 println("ω2 dressed = ", round(results[2], digits=6))
 display(results[5])
 params = deepcopy(results[9])
-ωd = results[2]
 
 flush(stdout)
 
@@ -109,7 +109,7 @@ println("Time evolution on GPU...")
 if is_RWA
     L_tot_gpu = L_gpu + L_drive_dressed_gpu
 else
-    drive_func(p, t) = cos(ωd * t)
+    drive_func(p, t) = cos(params.ωd * t)
     L_tot_gpu = (L_gpu, (L_drive_dressed_gpu, drive_func))
 end
 
@@ -130,7 +130,7 @@ expect_n1, expect_n2, expect_np = calculate_occupations(states_cpu_mats, V_mat)
 timestamp = Dates.format(now(), "yyyy-mm-dd_HHMMSS")
 filename = filename * "_" * timestamp
 save_path_data = joinpath(save_dir, filename * ".jld2")
-save_simulation(save_path_data, states_cpu_mats, V_mat, t, params, ωd, F, kp, tmax, nframes, expect_n1, expect_n2, expect_np)
+save_simulation(save_path_data, states_cpu_mats, V_mat, t, params, F, kp, tmax, nframes, expect_n1, expect_n2, expect_np)
 
 # 11. Plotting and Exporting
-fig_master = analysis_and_plots(states_cpu_mats, V_mat, t, t_selected, params, expect_n1, expect_n2, expect_np, ωd, F, kp, save_dir, filename, is_RWA)
+fig_master = analysis_and_plots(states_cpu_mats, V_mat, t, t_selected, params, expect_n1, expect_n2, expect_np, F, kp, save_dir, filename, is_RWA)

@@ -46,7 +46,7 @@ function Rabi_Oscillations(H, t, p)
     lines!(ax_3wm, t, real.(sol_3WM.expect[2, :]), label=L"|0, 1, 0, g\rangle", linewidth=2, color=:orange)  # Display the legend
     axislegend(ax_3wm)
 
- #=
+    #=
     # Create the second figure (Filter)
     fig_filter = Figure()
     ax_filter = Axis(fig_filter[1, 1], 
@@ -58,7 +58,7 @@ function Rabi_Oscillations(H, t, p)
     lines!(ax_filter, t, real.(sol_filter.expect[1, :]), label=L"|0, 1, 0, g\rangle", linewidth=2, color=:blue)
     lines!(ax_filter, t, real.(sol_filter.expect[2, :]), label=L"|0, 0, 1, g\rangle", linewidth=2, color=:orange)
     axislegend(ax_filter)
-=#
+    =#
     #return sol_3WM, sol_filter, fig_3wm, fig_filter
     return sol_3WM, 0.0, fig_3wm, 0.0
 end
@@ -98,7 +98,8 @@ params = SystemParams(
     g1 = 0.08, 
     g2 = 0.16,   
     g2p = 0, 
-    θ = π / 6.0
+    θ = π / 6.0,
+    ωd = 0.0
 )
 
 tmax = 10000

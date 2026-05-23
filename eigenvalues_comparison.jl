@@ -56,15 +56,16 @@ params = SystemParams(
     ω1 = 1.0, 
     ω2 = 2.0, 
     ωp = 0, 
-    ωq = 3.0, 
-    g1 = 0.08, 
-    g2 = 0.16,   
+    ωq = 2.5, 
+    g1 = 0.1, 
+    g2 = 0.2,   
     g2p = 0, 
-    θ = π / 6.0
+    θ = π / 6.0,
+    ωd = 0.0
 )
 
 results_full = get_optimal_frequency(H_full, params)
-results_eff = get_optimal_frequency(H_eff, params)
+results_eff = get_optimal_frequency(H_eff_4th_order_RWA, params)
 results_num = get_optimal_frequency(H_num, params)
 
 println("Optimal ω2 (full) = ", round(results_full[1], digits=6))
@@ -76,7 +77,7 @@ params_eff = deepcopy(results_eff[9])
 params_num = deepcopy(results_num[9])
 
 Hfull = H_full(params_full)
-Heff = H_eff(params_eff)
+Heff = H_eff_4th_order(params_eff)
 Hnum = H_num(params_num)
 
 E_full     = real.(eigvals(Matrix(Hfull.data)))

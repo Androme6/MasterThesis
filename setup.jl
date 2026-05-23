@@ -52,6 +52,7 @@ const P_full_mat = kron(P1_mat, kron(P2_mat, kron(Ip_mat, Iq_mat)))
     g2p::Float64
     g1p::Float64 = g2p * sqrt(ω1) / sqrt(ω2)
     θ::Float64
+    ωd::Float64
 end
 
 function H_full(p::SystemParams)

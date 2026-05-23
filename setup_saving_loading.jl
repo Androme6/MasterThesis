@@ -2,12 +2,12 @@ using QuantumToolbox
 using JLD2
 using LinearAlgebra
 
-function save_simulation(filepath, states_cpu_mats, V_mat, t, p::SystemParams, ωd, F, kp, tmax, nframes, expect_n1, expect_n2, expect_np)
+function save_simulation(filepath, states_cpu_mats, V_mat, t, p::SystemParams, F, kp, tmax, nframes, expect_n1, expect_n2, expect_np)
     
     params_dict = Dict(
             "ω1" => p.ω1, "ω2" => p.ω2, "ωp" => p.ωp, "ωq" => p.ωq,
             "g1" => p.g1, "g2" => p.g2, "g1p" => p.g1p, "g2p" => p.g2p,
-            "θ" => p.θ, "ωd" => ωd, "F" => F,
+            "θ" => p.θ, "ωd" => p.ωd, "F" => F,
             "kp" => kp, "N1" => N1, "N2" => N2, "Np" => Np, "Nq" => Nq,
             "tmax" => tmax, "nframes" => nframes
         )
