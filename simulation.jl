@@ -45,11 +45,13 @@ flush(stdout)
 
 H = H_fun(params)
 is_effective_model = (H_fun != H_full)
+is_RWA = (H_fun == H_eff_4th_order_RWA)
 
-field_pretransf_ext = 1im * sqrt(kp / params.ω2) * (a2_ext - a2_ext') 
-H_drive_pretransf_ext = 1im * F * (a2_ext - a2_ext')
+field_pretransf_ext = 1im * sqrt(kp / params.ω2) * (a2_ext - a2_ext')
+F_drive = is_RWA ? F / 2.0 : F
+H_drive_pretransf_ext = 1im * F_drive * (a2_ext - a2_ext')
 
-if is_effective_model
+if is_effective_model && !is_RWA
     println("Applying SW transformation to drive and fields...")
     S = SW_generator(params)
     
@@ -71,7 +73,7 @@ if is_effective_model
     field_final_mat = P_full_mat * field_trans_ext.data * P_full_mat'
     H_drive_final_mat = P_full_mat * H_drive_trans_ext.data * P_full_mat'
 else
-    println("Using bare drive and fields for H_full...")
+    println("Using bare drive and fields (H_full or RWA model)...")
     # Just project the bare operators down to target space
     field_final_mat = P_full_mat * field_pretransf_ext.data * P_full_mat'
     H_drive_final_mat = P_full_mat * H_drive_pretransf_ext.data * P_full_mat'
@@ -96,7 +98,6 @@ H_drive_dressed_sparse = droptol!(sparse(H_drive_dressed_dense), 1e-12)
 H_drive_dressed_qobj = QuantumObject(H_drive_dressed_sparse, type=Operator(), dims=dims_sys)
 L_drive_dressed_cpu = liouvillian(H_drive_dressed_qobj; matrix_form = matrix_form)
 L_drive_dressed_gpu = Adapt.adapt(CUSPARSE.CuSparseMatrixCSR, L_drive_dressed_cpu)
-drive_func(p, t) = cos(ωd * t)
 
 # 6. Initial State Preparation
 psi0_dressed = fock(N1*N2*Np*Nq, 0; dims = dims_sys) 
@@ -105,7 +106,12 @@ psi0_dressed_gpu = cu(psi0_dressed_mat)
 
 # 7. Time Evolution
 println("Time evolution on GPU...")
-L_tot_gpu = (L_gpu, (L_drive_dressed_gpu, drive_func))
+if is_RWA
+    L_tot_gpu = L_gpu + L_drive_dressed_gpu
+else
+    drive_func(p, t) = cos(ωd * t)
+    L_tot_gpu = (L_gpu, (L_drive_dressed_gpu, drive_func))
+end
 
 t = LinRange(0.0, tmax, nframes)
 
@@ -127,4 +133,4 @@ save_path_data = joinpath(save_dir, filename * ".jld2")
 save_simulation(save_path_data, states_cpu_mats, V_mat, t, params, ωd, F, kp, tmax, nframes, expect_n1, expect_n2, expect_np)
 
 # 11. Plotting and Exporting
-fig_master = analysis_and_plots(states_cpu_mats, V_mat, t, t_selected, params, expect_n1, expect_n2, expect_np, ωd, F, kp, save_dir, filename)
+fig_master = analysis_and_plots(states_cpu_mats, V_mat, t, t_selected, params, expect_n1, expect_n2, expect_np, ωd, F, kp, save_dir, filename, is_RWA)

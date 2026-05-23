@@ -26,13 +26,14 @@ function calculate_occupations(states_cpu_mats, V_mat)
 end
 
 
-function extract_memory_state(states_cpu_mats, V_mat, t, t_selected, ωd)
+function extract_memory_state(states_cpu_mats, V_mat, t, t_selected, ωd, is_RWA)
     println("Extracting memory counter-rotated density matrix...")
     t_selected_idx = argmin(abs.(t .- t_selected))
     rho_final_dressed_mat = states_cpu_mats[t_selected_idx]
     rho_final_bare_mat = V_mat * rho_final_dressed_mat * V_mat'
     t_final = t[t_selected_idx]
-    U_rot = exp(1im * ωd/2 * t_final * Array(n1.data))
+    rot_freq = is_RWA ? 0.0 : ωd/2
+    U_rot = exp(1im * rot_freq * t_final * Array(n1.data))
     rho_final_bare_rotated_mat = U_rot * rho_final_bare_mat * U_rot'
     rho_final_bare_rotated_qobj = QuantumObject(rho_final_bare_rotated_mat, type=Operator(), dims=dims_sys)
     rho_mode1_rotated = ptrace(rho_final_bare_rotated_qobj, 1)
@@ -40,10 +41,10 @@ function extract_memory_state(states_cpu_mats, V_mat, t, t_selected, ωd)
     return rho_mode1_rotated, t_selected_idx
 end
 
-function calculate_wigner(states_cpu_mats, V_mat, t, t_selected, ωd)
+function calculate_wigner(states_cpu_mats, V_mat, t, t_selected, ωd, is_RWA)
     println("Calculating Wigner function...")
 
-    rho_mode1_rotated, t_selected_idx = extract_memory_state(states_cpu_mats, V_mat, t, t_selected, ωd)
+    rho_mode1_rotated, t_selected_idx = extract_memory_state(states_cpu_mats, V_mat, t, t_selected, ωd, is_RWA)
     
     xvec = LinRange(-5, 5, 100)
     yvec = LinRange(-5, 5, 100)
@@ -113,9 +114,9 @@ end
 
 
 # Main function to run analysis and generate plots
-function analysis_and_plots(states_cpu_mats, V_mat, t, t_selected, params, expect_n1, expect_n2, expect_np, ωd, F, kp, save_dir, filename)
+function analysis_and_plots(states_cpu_mats, V_mat, t, t_selected, params, expect_n1, expect_n2, expect_np, ωd, F, kp, save_dir, filename, is_RWA)
     # Calculate Wigner
-    rho_mode1_rotated, W_cat, xvec, yvec, t_selected_idx = calculate_wigner(states_cpu_mats, V_mat, t, t_selected, ωd)
+    rho_mode1_rotated, W_cat, xvec, yvec, t_selected_idx = calculate_wigner(states_cpu_mats, V_mat, t, t_selected, ωd, is_RWA)
     
     # Generate and Save Plots
     fig_master = plotting(t, expect_n1, expect_n2, expect_np, rho_mode1_rotated, W_cat, xvec, yvec, t_selected_idx, save_dir, filename)

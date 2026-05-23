@@ -410,7 +410,30 @@ function H_eff_4th_order(p::SystemParams)
 
     H4 *= (1.0 / 8.0)
 
-    H_ext = H0 + Hint_P + H2 + H3 + H4 + H_filter
+
+    # =========================================================
+    # --- 2nd Order Filter: H_filter2 = (1/2) [S,[S, H_filter]] ---
+    # =========================================================
+    H_filter2 = 0.0 * Id_ext
+    
+    for j in 1:2, k in 1:2
+        # [Sz, [Sz, H_filter]] = 0
+        
+        # [Sz, [Sx, H_filter]]: -sin(2θ) * (gj*gk*gj,P / ωk) * Aj * Pk * XP * σy
+        term_SzSx_f = -sin_2t * (g[j] * g[k] * gp[j] / ω[k]) * A[j] * P[k] * XP * σy_ext
+        
+        # [Sx, [Sz, H_filter]]: sin(2θ) * (gj*gk*gj,P / ωj) * XP * (Ak * Pk * σy - Bk * Xk * σx)
+        term_SxSz_f = sin_2t * (g[j] * g[k] * gp[j] / ω[j]) * XP * (A[k] * P[k] * σy_ext - B[k] * X[k] * σx_ext)
+        
+        # [Sx, [Sx, H_filter]]: cos²(θ) * gj*gk*gj,P * Aj * Bk * Xk * XP * σz
+        term_SxSx_f = cos_t^2 * g[j] * g[k] * gp[j] * A[j] * B[k] * X[k] * XP * σz_ext
+        
+        H_filter2 += term_SzSx_f + term_SxSz_f + term_SxSx_f
+    end
+    H_filter2 *= 0.5 # 1/2 from the BCH series expansion
+
+
+    H_ext = H0 + Hint_P + H2 + H3 + H4 + H_filter + H_filter2
     H_sub_mat = P_full_mat * H_ext.data * P_full_mat'
     H_sub = QuantumObject(H_sub_mat, type=Operator(), dims=dims_sys)
     
@@ -453,4 +476,140 @@ function SW_generator(p::SystemParams)
     )
     S = Sz + Sx
     return S
+end
+
+function H_eff_4th_order_RWA(p::SystemParams)
+    # --- Setup Parameters ---
+    g  = [p.g1, p.g2]
+    gp = [p.g1p, p.g2p]
+    ω  = [p.ω1, p.ω2]
+    
+    A  = [2*p.ω1/(p.ω1^2 - p.ωq^2), 2*p.ω2/(p.ω2^2 - p.ωq^2)]
+    B  = [2*p.ωq/(p.ω1^2 - p.ωq^2), 2*p.ωq/(p.ω2^2 - p.ωq^2)]
+    
+    sin_t  = sin(p.θ)
+    cos_t  = cos(p.θ)
+    sin_2t = sin(2*p.θ)
+    
+    # --- Operators ---
+    a = [a1_ext, a2_ext]
+    n = [a1_ext'*a1_ext, a2_ext'*a2_ext]
+    nP = ap_ext'*ap_ext
+    
+    # Bosonic RWA Helper Functions
+    # 2n_i + 1
+    n_2(i) = 2 * n[i] + Id_ext
+    # 2n_i^2 + 2n_i + 1
+    n_sq(i) = 2 * n[i]*n[i] + 2 * n[i] + Id_ext 
+
+    # =========================================================
+    # --- Free Hamiltonian & Filter (RWA) ---
+    # =========================================================
+    Δ1 = p.ω1 - p.ωd/2
+    Δ2 = p.ω2 - p.ωd
+    ΔP = p.ωp - p.ωd
+    
+    H0_RWA = Δ1 * n[1] + Δ2 * n[2] + ΔP * nP + (p.ωq / 2) * σz_ext
+    H_filter_RWA = p.g2p * (a[2]' * ap_ext + a[2] * ap_ext')
+
+    # =========================================================
+    # --- 2nd Order Filter Commutators (RWA): (1/2)[S, [S, H_filter]] ---
+    # =========================================================
+    sum_filter = sum(g[j] * gp[j] * A[j] for j in 1:2)
+    H_filter2_RWA = 0.5 * cos_t^2 * g[2] * B[2] * sum_filter * (a[2]' * ap_ext + a[2] * ap_ext') * σz_ext
+
+    # =========================================================
+    # --- 2nd Order Commutators (RWA): (1/2)[S, H_Rabi] ---
+    # =========================================================
+    H2_RWA = 0.0 * Id_ext
+    for i in 1:2
+        # [Sz, Vz]_RWA
+        H2_RWA += 0.5 * (-2 * sin_t^2 * g[i]^2 / ω[i]) * Id_ext
+        
+        # [Sx, Vx]_RWA
+        H2_RWA += 0.5 * (-cos_t^2 * g[i]^2 * A[i]) * Id_ext
+        H2_RWA += 0.5 * (-cos_t^2 * g[i]^2 * B[i]) * n_2(i) * σz_ext
+    end
+
+    # =========================================================
+    # --- 3rd Order Commutators (RWA): (1/3)[S, [S, H_Rabi]] ---
+    # =========================================================
+    # 3-wave mixing pumping mechanism: a1^2 a2' + (a1')^2 a2
+    pump_op = a[1]*a[1]*a[2]' + a[1]'*a[1]'*a[2]
+    
+    term_3rd_Sz = cos_t * sin_2t * g[1]^2 * g[2] * ( (A[2] - A[1])/ω[1] + A[1]/ω[2] )
+    term_3rd_Sx = -0.5 * cos_t * sin_2t * g[1]^2 * g[2] * ( A[1]*(2*A[2] - A[1]) + B[1]*(B[1] + 2*B[2]) )
+    
+    H3_RWA = (1.0 / 3.0) * (term_3rd_Sz + term_3rd_Sx) * pump_op * σz_ext
+
+    # =========================================================
+    # --- 4th Order Commutators (RWA): (1/8)[S, [S, [S, H_Rabi]]] ---
+    # =========================================================
+    H4_RWA = 0.0 * Id_ext
+
+    # --- 4.1 From commutators with Sz outer generators ---
+    # [Sz, [Sz, [Sx, Vx]]]
+    for i in 1:2
+        H4_RWA += -4 * sin_t^2 * cos_t^2 * (g[i]^4 / ω[i]^2) * 2 * B[i] * σz_ext
+    end
+    for i in 1:2, j in 1:2
+        if i != j
+            H4_RWA += -4 * sin_t^2 * cos_t^2 * (g[i]^2 * g[j]^2 / (ω[i]*ω[j])) * (B[i] + B[j]) * σz_ext
+        end
+    end
+    
+    # [Sz, [Sx, [Sz, Vx]]]
+    for i in 1:2, j in 1:2
+        H4_RWA += -4 * cos_t^2 * sin_t^2 * (g[i]^2 * g[j]^2 / (ω[i]*ω[j])) * A[i] * n_2(i)
+        H4_RWA += -4 * cos_t^2 * sin_t^2 * (g[i]^2 * g[j]^2 / (ω[i]*ω[j])) * B[i] * σz_ext
+    end
+
+    # [Sz, [Sx, [Sx, Vz]]]
+    for i in 1:2, j in 1:2
+        H4_RWA += 2 * cos_t^2 * sin_t^2 * (g[i]^2 * g[j]^2 / ω[j]) * (A[i]^2 + 2*B[i]*B[j] + B[i]^2) * n_2(i)
+        H4_RWA += 2 * cos_t^2 * sin_t^2 * (g[i]^2 * g[j]^2 / ω[j]) * A[i] * (2*B[i] + B[j]) * σz_ext
+    end
+
+    # --- 4.2 From commutators with Sx outer generators ---
+    # [Sx, [Sz, [Sz, Vx]]]
+    for i in 1:2
+        H4_RWA += 4 * cos_t^2 * sin_t^2 * (g[i]^4 / ω[i]^2) * B[i] * n_sq(i) * σz_ext
+    end
+    for i in 1:2, j in 1:2
+        if i != j
+            H4_RWA += 4 * cos_t^2 * sin_t^2 * (g[i]^2 * g[j]^2 / ω[i]^2) * B[j] * n_2(i) * n_2(j) * σz_ext
+        end
+        H4_RWA += 4 * cos_t^2 * sin_t^2 * (g[i]^2 * g[j]^2 / ω[i]^2) * A[j] * n_2(i)
+    end
+
+    # [Sx, [Sz, [Sx, Vz]]]
+    for i in 1:2, j in 1:2
+        if i != j
+            H4_RWA += 2 * cos_t^2 * sin_t^2 * g[i]^2 * g[j]^2 * (B[i]*A[j]/ω[j] - A[i]*B[j]/ω[i]) * n_2(i) * n_2(j) * σz_ext
+        end
+        H4_RWA += 2 * cos_t^2 * sin_t^2 * (g[i]^2 * g[j]^2 / ω[j]) * (2*B[i]*B[j] - A[i]*A[j]) * n_2(i)
+    end
+
+    # [Sx, [Sx, [Sx, Vx]]]
+    for i in 1:2
+        H4_RWA += cos_t^4 * g[i]^4 * B[i] * (A[i]^2 + 3*B[i]^2) * n_sq(i) * σz_ext
+    end
+    for i in 1:2, j in 1:2
+        if i != j
+            H4_RWA += cos_t^4 * g[i]^2 * g[j]^2 * (B[i]*A[j]^2 + B[i]*B[j]^2 + 2*B[i]^2*B[j]) * n_2(i) * n_2(j) * σz_ext
+        end
+        H4_RWA += cos_t^4 * g[i]^2 * g[j]^2 * A[j]*B[i] * (3*B[j] + B[i]) * n_2(i)
+    end
+
+    H4_RWA *= (1.0 / 8.0)
+
+    # =========================================================
+    # --- Final Assembly ---
+    # =========================================================
+    H_ext_RWA = H0_RWA + H_filter_RWA + H_filter2_RWA + H2_RWA + H3_RWA + H4_RWA
+    
+    H_sub_mat = P_full_mat * H_ext_RWA.data * P_full_mat'
+    H_sub = QuantumObject(H_sub_mat, type=Operator(), dims=dims_sys)
+    
+    return H_sub 
 end
