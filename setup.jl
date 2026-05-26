@@ -158,6 +158,7 @@ function H_eff(p::SystemParams)
     return H_sub 
 end
 
+# they match
 function H_eff_4th_order(p::SystemParams)
     H0 = p.ω1 * a1_ext'*a1_ext + p.ω2 * a2_ext'*a2_ext + p.ωp * ap_ext'*ap_ext + p.ωq * σz_ext / 2
     Hint_P = (p.g1p * (a1_ext+a1_ext') + p.g2p * (a2_ext+a2_ext')) * (ap_ext+ap_ext')
@@ -434,13 +435,12 @@ function H_eff_4th_order(p::SystemParams)
     H_filter2 *= 0.5 # 1/2 from the BCH series expansion
 
 
-    H_ext = H0 + Hint_P + H2 + H3 + H4 + H_filter + H_filter2
+    H_ext = H0 + Hint_P +H_filter + H_filter2 + H2 + H3 + H4 
     H_sub_mat = P_full_mat * H_ext.data * P_full_mat'
     H_sub = QuantumObject(H_sub_mat, type=Operator(), dims=dims_sys)
     
     return H_sub 
 end
-
 function H_num(p::SystemParams)
     H0 = p.ω1 * a1_ext'*a1_ext + p.ω2 * a2_ext'*a2_ext + p.ωp * ap_ext'*ap_ext + p.ωq * σz_ext / 2
     Hint_P = (p.g1p * (a1_ext+a1_ext') + p.g2p * (a2_ext+a2_ext')) * (ap_ext+ap_ext')
@@ -462,6 +462,7 @@ function H_num(p::SystemParams)
     return H_sub
 end
 
+
 function SW_generator(p::SystemParams)
     A1 = 2*p.ω1/(p.ω1^2 - p.ωq^2)
     A2 = 2*p.ω2/(p.ω2^2 - p.ωq^2)
@@ -478,8 +479,119 @@ function SW_generator(p::SystemParams)
     S = Sz + Sx
     return S
 end
+# it matches with the commutator one
+function L2_eff_4th_order(p::SystemParams, kp::Float64)
+    # --- Setup Parameters ---
+    g  = [p.g1, p.g2]
+    ω  = [p.ω1, p.ω2]
+    
+    A  = [2*p.ω1/(p.ω1^2 - p.ωq^2), 2*p.ω2/(p.ω2^2 - p.ωq^2)]
+    B  = [2*p.ωq/(p.ω1^2 - p.ωq^2), 2*p.ωq/(p.ω2^2 - p.ωq^2)]
+    
+    sin_t  = sin(p.θ)
+    cos_t  = cos(p.θ)
+    sin_2t = sin(2*p.θ)
+    
+    # --- Operators ---
+    X = [a1_ext + a1_ext', a2_ext + a2_ext']
+    P = [1im * (a1_ext' - a1_ext), 1im * (a2_ext' - a2_ext)]
+    
+    # Base Operator & Common Prefactor: L2 = -sqrt(k2/w2) * P2
+    Γ = g[2] * B[2] * sqrt(kp / ω[2])
+    L0 = -sqrt(kp / ω[2]) * P[2]
+    
+    # =========================================================
+    # --- 1st Order Commutators ---
+    # =========================================================
+    f1 = -Γ * cos_t * σy_ext
+    
+    # =========================================================
+    # --- 2nd Order Commutators ---
+    # =========================================================
+    f2 = 0.0 * Id_ext
+    for k in 1:2
+        f2 += Γ * sin_2t * (g[k] / ω[k]) * P[k] * σx_ext
+        f2 -= Γ * cos_t^2 * g[k] * A[k] * P[k] * σz_ext
+    end
+    
+    # =========================================================
+    # --- 3rd Order Commutators ---
+    # =========================================================
+    f3 = 0.0 * Id_ext
+    for j in 1:2, k in 1:2
+        # [Sz, [Sz, [Sx, L2]]]
+        f3 += 4 * Γ * sin_t^2 * cos_t * (g[j] * g[k] / (ω[j] * ω[k])) * P[j]*P[k] * σy_ext
+        
+        # [Sx, [Sz, [Sx, L2]]]
+        ac_XP = QuantumToolbox.commutator(X[j], P[k], anti=true)
+        f3 -= Γ * sin_t * cos_t^2 * (g[j] * g[k] / ω[k]) * B[j] * ac_XP * σz_ext
+        
+        # [Sx, [Sx, [Sx, L2]]]
+        f3 += Γ * cos_t^3 * g[j] * g[k] * A[k] * A[j] * P[j]*P[k] * σy_ext
+        f3 -= 0.5 * Γ * cos_t^3 * g[j] * g[k] * A[k] * B[j] * ac_XP * σx_ext
+    end
+    
+    # =========================================================
+    # --- 4th Order Commutators ---
+    # =========================================================
+    f4 = 0.0 * Id_ext
+    
+    # --- terms derived from C3(1): [Sz, [Sz, [Sx, L2]]] ---
+    for j in 1:2, k in 1:2, l in 1:2
+        f4 -= 8 * Γ * sin_t^3 * cos_t * (g[j]*g[k]*g[l] / (ω[j]*ω[k]*ω[l])) * P[j]*P[k]*P[l] * σx_ext
+        f4 += 4 * Γ * sin_t^2 * cos_t^2 * (g[j]*g[k]*g[l] / (ω[j]*ω[k])) * A[l] * P[j]*P[k]*P[l] * σz_ext
+    end
+    # (FIX 1: Missing Identity Term)
+    for j in 1:2, k in 1:2
+        f4 += 8 * Γ * sin_t^2 * cos_t^2 * (g[j]^2 * g[k] / (ω[j]*ω[k])) * B[j] * P[k] * Id_ext
+    end
+    
+    # --- terms derived from C3(2): [Sx, [Sz, [Sx, L2]]] ---
+    # (FIX 2: Sign error on Identity term)
+    for j in 1:2, k in 1:2
+        f4 += 4 * Γ * sin_t^2 * cos_t^2 * (g[j]^2 * g[k] / (ω[j]*ω[k])) * B[j] * P[k] * Id_ext
+    end
+    for j in 1:2, k in 1:2, l in 1:2
+        inner = QuantumToolbox.commutator(X[j], P[k], anti=true)
+        ac_Pl = QuantumToolbox.commutator(P[l], inner, anti=true)
+        ac_Xl = QuantumToolbox.commutator(X[l], inner, anti=true)
+        
+        f4 += 0.5 * Γ * sin_t * cos_t^3 * (g[j]*g[k]*g[l] / ω[k]) * B[j] * A[l] * ac_Pl * σy_ext
+        f4 -= 0.5 * Γ * sin_t * cos_t^3 * (g[j]*g[k]*g[l] / ω[k]) * B[j] * B[l] * ac_Xl * σx_ext
+    end
+    
+    # --- terms derived from C3(3): [Sx, [Sx, [Sx, L2]]] ---
+    for j in 1:2, k in 1:2, l in 1:2
+        inner = QuantumToolbox.commutator(X[j], P[k], anti=true)
+        ac_Pl = QuantumToolbox.commutator(P[l], inner, anti=true)
+        
+        # (FIX 3: Sign error on σy term)
+        f4 -= 0.5 * Γ * sin_t * cos_t^3 * (g[j]*g[k]*g[l] / ω[l]) * A[k] * B[j] * ac_Pl * σy_ext
+        f4 -= 2.0 * Γ * sin_t * cos_t^3 * (g[j]*g[k]*g[l] / ω[l]) * A[k] * A[j] * P[j]*P[k]*P[l] * σx_ext
+        
+        ac_Xl = QuantumToolbox.commutator(X[l], inner, anti=true)
+        f4 += Γ * cos_t^4 * g[j]*g[k]*g[l] * A[k] * A[j]*A[l] * P[j]*P[k]*P[l] * σz_ext
+        f4 += 0.25 * Γ * cos_t^4 * g[j]*g[k]*g[l] * A[k] * B[j]*B[l] * ac_Xl * σz_ext
+    end
+    # (FIX 4: Coefficient correction on Identity term)
+    for j in 1:2, k in 1:2
+        f4 += 3 * Γ * cos_t^4 * g[j]^2 * g[k] * A[k] * A[j] * B[j] * P[k] * Id_ext
+    end
 
-function H_eff_4th_order_RWA(p::SystemParams)
+    # =========================================================
+    # --- Final Assembly ---
+    # =========================================================
+    # BCH Series: e^S L0 e^-S = L0 + f1 + 1/2 f2 + 1/6 f3 + 1/24 f4
+    L_ext = L0 + f1 + (1.0/2.0)*f2 + (1.0/6.0)*f3 + (1.0/24.0)*f4
+    
+    L_sub_mat = P_full_mat * L_ext.data * P_full_mat'
+    L_sub = QuantumObject(L_sub_mat, type=Operator(), dims=dims_sys)
+    
+    return L_sub 
+end
+
+# they don't match
+function H_eff_RWA(p::SystemParams)
     # --- Setup Parameters ---
     g  = [p.g1, p.g2]
     gp = [p.g1p, p.g2p]
@@ -613,4 +725,177 @@ function H_eff_4th_order_RWA(p::SystemParams)
     H_sub = QuantumObject(H_sub_mat, type=Operator(), dims=dims_sys)
     
     return H_sub 
+end
+function H_eff_num_RWA(p::SystemParams)
+    # 1. Get the full 4th-order effective model (in the LAB frame)
+    H_eff_qobj = H_eff_4th_order(p)
+    
+    # 2. Build the RWA conservation operators
+    N_ex_ext = (a1_ext'*a1_ext) + 2*(a2_ext'*a2_ext) + 2*(ap_ext'*ap_ext)
+    N_q_ext  = σz_ext
+    
+    N_ex_sub = P_full_mat * N_ex_ext.data * P_full_mat'
+    N_q_sub  = P_full_mat * N_q_ext.data * P_full_mat'
+    
+    N_ex_diag = round.(real.(diag(N_ex_sub)), digits=3)
+    N_q_diag  = round.(real.(diag(N_q_sub)), digits=3)
+    
+    # 3. Scrub the Hamiltonian matrix
+    H_dense = Array(H_eff_qobj.data)
+    dim = size(H_dense, 1)
+    
+    for i in 1:dim
+        for j in 1:dim
+            if (N_ex_diag[i] != N_ex_diag[j]) || (N_q_diag[i] != N_q_diag[j])
+                H_dense[i, j] = 0.0
+            end
+        end
+    end
+    
+    # =========================================================
+    # 4. FIX: Shift to the Rotating Frame!
+    # Mode 1 rotates at ωd/2, Mode 2 at ωd, Mode P at ωd
+    # =========================================================
+    H_rot_ext = (p.ωd / 2) * (a1_ext'*a1_ext) + p.ωd * (a2_ext'*a2_ext) + p.ωd * (ap_ext'*ap_ext)
+    H_rot_sub = P_full_mat * H_rot_ext.data * P_full_mat'
+    
+    # Subtract the rotation to get the exact RWA H0 (Δ1, Δ2, ΔP)
+    H_dense_rot = H_dense - Array(H_rot_sub)
+
+    return QuantumObject(sparse(H_dense_rot), type=Operator(), dims=dims_sys)
+end
+
+# they match
+function L2_eff_RWA(p::SystemParams, kp::Float64)
+    # --- Setup Parameters ---
+    g  = [p.g1, p.g2]
+    ω  = [p.ω1, p.ω2]
+    
+    A  = [2*p.ω1/(p.ω1^2 - p.ωq^2), 2*p.ω2/(p.ω2^2 - p.ωq^2)]
+    B  = [2*p.ωq/(p.ω1^2 - p.ωq^2), 2*p.ωq/(p.ω2^2 - p.ωq^2)]
+    
+    sin_t = sin(p.θ)
+    cos_t = cos(p.θ)
+    
+    # --- Operators ---
+    a = [a1_ext, a2_ext]
+    n = [a1_ext'*a1_ext, a2_ext'*a2_ext]
+    
+    # Base Common Prefactor
+    Γ = g[2] * B[2] * sqrt(kp / ω[2])
+    
+    C_jumps = []
+    
+    for m in 1:2
+        # =========================================================
+        # --- 0th & 2nd Order ---
+        # =========================================================
+        # L0 = -sqrt(kp/w2) P2. The pure annihilation path is (+1im * a).
+        C0 = (m == 2) ? 1im * sqrt(kp / ω[2]) * a[2] : 0.0 * Id_ext
+        
+        # f2 = - Γ * cos_t^2 * gm * Am * P_m * σz 
+        # Map P_m -> (+1im * a_m) and apply BCH factor (1/2)
+        C2 = 0.5 * 1im * Γ * cos_t^2 * g[m] * A[m] * σz_ext * a[m]
+        
+        # =========================================================
+        # --- 4th Order ---
+        # =========================================================
+        term_I = 0.0 * Id_ext
+        term_Z = 0.0 * Id_ext
+        
+        for j in 1:2
+            # --- Scalar (Identity) Shifts ---
+            term_I += 12 * sin_t^2 * (g[j]^2 * g[m] / (ω[j] * ω[m])) * B[j] * Id_ext
+            term_I += 3 * cos_t^2 * (g[j]^2 * g[m]) * A[m] * A[j] * B[j] * Id_ext
+            
+            # --- Photon-Number Dependent Shifts (σz) ---
+            if j != m
+                # Cross-scattering: 3 permutations
+                n_cross = 2 * n[j] + Id_ext
+                
+                term_Z += 4 * sin_t^2 * (g[j]^2 * g[m]) * (A[m]/(ω[j]^2) + 2*A[j]/(ω[j]*ω[m])) * n_cross
+                term_Z += cos_t^2 * (g[j]^2 * g[m]) * A[m] * (3 * A[j]^2 + B[j]^2) * n_cross
+            else
+                # Self-scattering: 1 permutation
+                n_self = n[m] + Id_ext
+                
+                term_Z += 12 * sin_t^2 * (g[m]^3) * (A[m]/(ω[m]^2)) * n_self
+                term_Z += cos_t^2 * (g[m]^3) * A[m] * (3 * A[m]^2 + B[m]^2) * n_self
+            end
+        end
+        
+        # All P contractions in 4th order map to (-1im * a_m). Apply BCH factor (1/24)
+        C4 = (1.0 / 24.0) * (-1im) * Γ * cos_t^2 * (term_I + term_Z * σz_ext) * a[m]
+        
+        # =========================================================
+        # --- Final Assembly ---
+        # =========================================================
+        Cm_ext = C0 + C2 + C4
+        
+        Cm_sub_mat = P_full_mat * Cm_ext.data * P_full_mat'
+        Cm_sub = QuantumObject(Cm_sub_mat, type=Operator(), dims=dims_sys)
+        push!(C_jumps, Cm_sub)
+    end
+    
+    return C_jumps[1], C_jumps[2]
+end
+function L2_eff_num_RWA(L_eff_qobj::QuantumObject)
+    L_dense = Array(L_eff_qobj.data)
+    dim = size(L_dense, 1)
+    
+    # 1. Get the diagonals of the number operators in the target subspace
+    n1_diag = round.(real.(diag(P_full_mat * (a1_ext'*a1_ext).data * P_full_mat')), digits=3)
+    n2_diag = round.(real.(diag(P_full_mat * (a2_ext'*a2_ext).data * P_full_mat')), digits=3)
+    np_diag = round.(real.(diag(P_full_mat * (ap_ext'*ap_ext).data * P_full_mat')), digits=3)
+    nq_diag = round.(real.(diag(P_full_mat * σz_ext.data * P_full_mat')), digits=3)
+
+    C1_dense = zeros(ComplexF64, dim, dim)
+    C2_dense = zeros(ComplexF64, dim, dim)
+
+    # 2. Extract the pure annihilation paths
+    for i in 1:dim
+        for j in 1:dim
+            # L_dense[i, j] represents a transition from state |j> to state |i>
+            
+            # Mode 1 Jump: Final state |i> has 1 less photon in Mode 1 than initial state |j>
+            if (n1_diag[i] == n1_diag[j] - 1) && (n2_diag[i] == n2_diag[j]) && 
+               (np_diag[i] == np_diag[j]) && (nq_diag[i] == nq_diag[j])
+                C1_dense[i, j] = L_dense[i, j]
+            end
+
+            # Mode 2 Jump: Final state |i> has 1 less photon in Mode 2 than initial state |j>
+            if (n2_diag[i] == n2_diag[j] - 1) && (n1_diag[i] == n1_diag[j]) && 
+               (np_diag[i] == np_diag[j]) && (nq_diag[i] == nq_diag[j])
+                C2_dense[i, j] = L_dense[i, j]
+            end
+        end
+    end
+
+    return QuantumObject(sparse(C1_dense), type=Operator(), dims=dims_sys), 
+           QuantumObject(sparse(C2_dense), type=Operator(), dims=dims_sys)
+end
+
+
+function H_drive_num_RWA(H_drive_qobj::QuantumObject)
+    # Get diagonals of the effective excitation number and qubit state
+    N_ex_diag = round.(real.(diag(P_full_mat * ((a1_ext'*a1_ext) + 2*(a2_ext'*a2_ext) + 2*(ap_ext'*ap_ext)).data * P_full_mat')), digits=3)
+    N_q_diag  = round.(real.(diag(P_full_mat * σz_ext.data * P_full_mat')), digits=3)
+
+    H_d_dense = Array(H_drive_qobj.data)
+    dim = size(H_d_dense, 1)
+
+    for i in 1:dim
+        for j in 1:dim
+            # Keep ONLY terms that create/destroy exactly 2 effective quanta (the drive frequency)
+            # and leave the qubit in its current state.
+            ΔN_ex = abs(N_ex_diag[i] - N_ex_diag[j])
+            ΔN_q  = abs(N_q_diag[i] - N_q_diag[j])
+            
+            if (ΔN_ex != 2) || (ΔN_q != 0)
+                H_d_dense[i, j] = 0.0
+            end
+        end
+    end
+
+    return QuantumObject(sparse(H_d_dense), type=Operator(), dims=dims_sys)
 end
