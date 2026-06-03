@@ -24,6 +24,22 @@ function calculate_occupations(states_cpu_mats, V_mat)
 
     return expect_n1_plot, expect_n2_plot, expect_np_plot
 end
+function extract_effective_kappas(jump_a1::QuantumObject, jump_a2::QuantumObject)
+    ket100g = tensor(fock(N1_ext, 1), fock(N2_ext, 0), fock(Np, 0), fock(2, 1))
+    ket010g = tensor(fock(N1_ext, 0), fock(N2_ext, 1), fock(Np, 0), fock(2, 1))
+    
+    ket100g_sub = QuantumObject(P_full_mat * ket100g.data, type=Ket(), dims=dims_sys)
+    ket010g_sub = QuantumObject(P_full_mat * ket010g.data, type=Ket(), dims=dims_sys)
+    
+    # 3. Calculate k_eff = <psi | C^\dagger C | psi>
+    k_eff_1 = real(expect(jump_a1' * jump_a1, ket100g_sub))
+    k_eff_2 = real(expect(jump_a2' * jump_a2, ket010g_sub))
+
+    println("Effective κ1 = ", k_eff_1)
+    println("Effective κ2 = ", k_eff_2)
+
+    return k_eff_1, k_eff_2
+end
 
 
 function extract_memory_state(states_cpu_mats, V_mat, t, t_selected, ωd, is_RWA)
@@ -59,7 +75,7 @@ function plotting(t, expect_n1, expect_n2, expect_np, rho_mode1_rotated, W_cat, 
 
     # Panel 1: Population Dynamics
     ax_pop = Axis(fig_master[1, 1], title="Occupation Numbers", xlabel=L"\text{Time}  (1/\omega_1)", ylabel="Average Occupation Number")
-    lines!(ax_pop, t, expect_np, label="<nP> (Purcell Filter)", linewidth=3, color=:green)
+    lines!(ax_pop, t, expect_np, label="<nP> (Purcell Filter)", linewidth=3, color=:green, linestyle=:dash)
     lines!(ax_pop, t, expect_n2, label="<n2> (Buffer Mode)", linewidth=3, color=:orange)
     lines!(ax_pop, t, expect_n1, label="<n1> (Memory Mode)", linewidth=3, color=:blue)
     axislegend(ax_pop, position=:lt)
@@ -91,7 +107,7 @@ function plotting(t, expect_n1, expect_n2, expect_np, rho_mode1_rotated, W_cat, 
     return fig_master
 end
 
-function text_summary(params, expect_n1, expect_n2, expect_np, F, kp, save_dir, filename)
+function text_summary(params, expect_n1, expect_n2, expect_np, F, kp, N1, N2, Np, Nq, save_dir, filename)
     println("Saving text logs...")
     summary_text = """
     --- System Parameters ---
@@ -99,6 +115,7 @@ function text_summary(params, expect_n1, expect_n2, expect_np, F, kp, save_dir, 
     g1 = $(params.g1) | g2 = $(params.g2) | g1p = $(params.g1p) | g2p = $(params.g2p)
     θ    = $(round(params.θ, digits=3))
     κp  = $(kp) | F = $(F) | ωd  = $(params.ωd)
+    N1 = $(N1) | N2 = $(N2) | Np = $(Np) | Nq = $(Nq)
 
     Observables:
     Final ⟨n1⟩ = $(round(expect_n1[end], digits=4))
@@ -114,7 +131,7 @@ end
 
 
 # Main function to run analysis and generate plots
-function analysis_and_plots(states_cpu_mats, V_mat, t, t_selected, params, expect_n1, expect_n2, expect_np, F, kp, save_dir, filename, is_RWA)
+function analysis_and_plots(states_cpu_mats, V_mat, t, t_selected, params, expect_n1, expect_n2, expect_np, F, kp, N1, N2, Np, Nq, save_dir, filename, is_RWA)
     # Calculate Wigner
     rho_mode1_rotated, W_cat, xvec, yvec, t_selected_idx = calculate_wigner(states_cpu_mats, V_mat, t, t_selected, params.ωd, is_RWA)
     
@@ -122,6 +139,6 @@ function analysis_and_plots(states_cpu_mats, V_mat, t, t_selected, params, expec
     fig_master = plotting(t, expect_n1, expect_n2, expect_np, rho_mode1_rotated, W_cat, xvec, yvec, t_selected_idx, save_dir, filename)
     
     # Generate and Save Text Logs
-    text_summary(params, expect_n1, expect_n2, expect_np, F, kp, save_dir, filename)
+    text_summary(params, expect_n1, expect_n2, expect_np, F, kp, N1, N2, Np, Nq, save_dir, filename)
     return fig_master
 end

@@ -14,7 +14,7 @@ function get_optimal_frequency(H_fun, p, ω2_lower_bound = 1.9, ω2_upper_bound 
     eigenvalues = @showprogress mapreduce(hcat, ω2_list) do ω2
             p.ω2 = ω2
             p.g1p = p.g2p * sqrt(p.ω1) / sqrt(p.ω2)
-            H = H_fun(p)
+            H = H_fun(p)    
             eigenstates(H, sparse = true, sigma = -p.ωq, eigvals = 7).values
     end
     #plotting
@@ -35,7 +35,7 @@ function get_optimal_frequency(H_fun, p, ω2_lower_bound = 1.9, ω2_upper_bound 
 
     #xlims!(ax2, ω2_opt-0.02, ω2_opt+0.02)
     xlims!(ax2, 1.9, 2.2)
-    ylims!(ax2, real(eigenvalues[lower_index_2, idx_opt]- eigenvalues[1,idx_opt])-0.05, real(eigenvalues[upper_index_2, idx_opt] - eigenvalues[1,idx_opt])+0.05)
+    ylims!(ax2, real(eigenvalues[lower_index_2, idx_opt]- eigenvalues[1,idx_opt])-2*gap, real(eigenvalues[upper_index_2, idx_opt] - eigenvalues[1,idx_opt])+2*gap)
 
     #=
     #ωp part
@@ -72,14 +72,14 @@ function get_optimal_frequency(H_fun, p, ω2_lower_bound = 1.9, ω2_upper_bound 
     return ω2_opt, ω2_dressed, 0.0, 0.0, fig2, nothing, gap, 0.0, p_new, eigenvalues, ω2_list, 0.0, 0.0
 end
 
-function compare(eigenvals_full, eigenvals_eff, eigenvals_num, ω2_list_full, ω2_list_eff, ω2_list_num, ω2_opt_full, ω2_opt_eff, ω2_opt_num, ω2_dressed_full, ω2_dressed_eff, ω2_dressed_num)
+function compare(eigenvals_full, eigenvals_eff, eigenvals_num, ω2_list_full, ω2_list_eff, ω2_list_num, ω2_opt_full, ω2_opt_eff, ω2_opt_num, ω2_dressed_full, ω2_dressed_eff, ω2_dressed_num, gap_full, gap_eff, gap_num)
     fig_super = Figure(size = (800, 600))
     ax_super = Axis(fig_super[1, 1], 
                xlabel = L"\omega_2/\omega_1", 
                ylabel = L"E/\hbar\omega_1",
                title = "Superimposed Frequency Sweep")
     xlims!(ax_super, (ω2_opt_full + ω2_opt_eff + ω2_opt_num)/3 -0.1, (ω2_opt_full + ω2_opt_eff + ω2_opt_num)/3 +0.1)
-    ylims!(ax_super, (ω2_dressed_full + ω2_dressed_eff + ω2_dressed_num)/3 -0.03, (ω2_dressed_full + ω2_dressed_eff + ω2_dressed_num)/3 +0.03)
+    ylims!(ax_super, (ω2_dressed_full + ω2_dressed_eff + ω2_dressed_num)/3 -2*(gap_full + gap_eff + gap_num)/3, (ω2_dressed_full + ω2_dressed_eff + ω2_dressed_num)/3 +2*(gap_full + gap_eff + gap_num)/3)
 
     for i in 1:size(eigenvals_full, 1)
         # We only add a label to the first line so the legend isn't cluttered with 7 entries

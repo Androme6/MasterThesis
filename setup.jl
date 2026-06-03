@@ -7,7 +7,7 @@ using Dates
 using JLD2
 using LinearAlgebra
 
-const N1 = 20
+const N1 = 22
 const N2 = 4
 const Np = 1
 const Nq = 2
@@ -55,6 +55,16 @@ const P_full_mat = kron(P1_mat, kron(P2_mat, kron(Ip_mat, Iq_mat)))
     ωd::Float64
 end
 
+function H_ideal(p::SystemParams)
+    numerator = 3 * sqrt(2) * p.g2 * (p.g1^2) * (p.ωq^2) * sin(2 * p.θ) * cos(p.θ)
+    denominator = 4 * (p.ω1^4) - 5 * (p.ω1^2) * (p.ωq^2) + (p.ωq^4)
+    g_eff = numerator / denominator  
+    H = g_eff * (a1_ext * a1_ext * a2_ext' + a1_ext' * a1_ext' * a2_ext) 
+    H_sub = QuantumObject(P_full_mat * H.data * P_full_mat', type=Operator(), dims=dims_sys)
+    return H_sub
+end
+
+
 function H_full(p::SystemParams)
     H0 = p.ω1 * a1'*a1 + p.ω2 * a2'*a2 + p.ωp * ap'*ap + p.ωq * σz / 2
     Hint = (p.g1 * (a1+a1') + p.g2 * (a2+a2')) * (sin(p.θ) * σz + cos(p.θ) * σx)
@@ -62,7 +72,7 @@ function H_full(p::SystemParams)
     return H0 + Hint + Hint_P
 end
 
-function H_eff(p::SystemParams)
+function H_eff_3rd_order(p::SystemParams)
     H0 = p.ω1 * a1_ext'*a1_ext + p.ω2 * a2_ext'*a2_ext + p.ωp * ap_ext'*ap_ext + p.ωq * σz_ext / 2
     Hint_P = (p.g1p * (a1_ext+a1_ext') + p.g2p * (a2_ext+a2_ext')) * (ap_ext+ap_ext')
     
@@ -155,7 +165,7 @@ function H_eff(p::SystemParams)
     H_sub_mat = P_full_mat * H_ext.data * P_full_mat'
     H_sub = QuantumObject(H_sub_mat, type=Operator(), dims=dims_sys)
     
-    return H_sub 
+    return H_sub#, H0, H3
 end
 
 # they match
@@ -436,10 +446,11 @@ function H_eff_4th_order(p::SystemParams)
 
 
     H_ext = H0 + Hint_P +H_filter + H_filter2 + H2 + H3 + H4 
+    
     H_sub_mat = P_full_mat * H_ext.data * P_full_mat'
     H_sub = QuantumObject(H_sub_mat, type=Operator(), dims=dims_sys)
     
-    return H_sub 
+    return H_sub#, H0, H3, H4
 end
 function H_num(p::SystemParams)
     H0 = p.ω1 * a1_ext'*a1_ext + p.ω2 * a2_ext'*a2_ext + p.ωp * ap_ext'*ap_ext + p.ωq * σz_ext / 2
@@ -480,7 +491,7 @@ function SW_generator(p::SystemParams)
     return S
 end
 # it matches with the commutator one
-function L2_eff_4th_order(p::SystemParams, kp::Float64)
+function L2_eff_4th_order(p::SystemParams, kp::Float64, is_3rd_order::Bool=false)
     # --- Setup Parameters ---
     g  = [p.g1, p.g2]
     ω  = [p.ω1, p.ω2]
@@ -531,58 +542,63 @@ function L2_eff_4th_order(p::SystemParams, kp::Float64)
         f3 -= 0.5 * Γ * cos_t^3 * g[j] * g[k] * A[k] * B[j] * ac_XP * σx_ext
     end
     
-    # =========================================================
-    # --- 4th Order Commutators ---
-    # =========================================================
-    f4 = 0.0 * Id_ext
+    if !is_3rd_order 
+        # =========================================================
+        # --- 4th Order Commutators ---
+        # =========================================================
+        f4 = 0.0 * Id_ext
     
-    # --- terms derived from C3(1): [Sz, [Sz, [Sx, L2]]] ---
-    for j in 1:2, k in 1:2, l in 1:2
-        f4 -= 8 * Γ * sin_t^3 * cos_t * (g[j]*g[k]*g[l] / (ω[j]*ω[k]*ω[l])) * P[j]*P[k]*P[l] * σx_ext
-        f4 += 4 * Γ * sin_t^2 * cos_t^2 * (g[j]*g[k]*g[l] / (ω[j]*ω[k])) * A[l] * P[j]*P[k]*P[l] * σz_ext
-    end
-    # (FIX 1: Missing Identity Term)
-    for j in 1:2, k in 1:2
-        f4 += 8 * Γ * sin_t^2 * cos_t^2 * (g[j]^2 * g[k] / (ω[j]*ω[k])) * B[j] * P[k] * Id_ext
-    end
+        # --- terms derived from C3(1): [Sz, [Sz, [Sx, L2]]] ---
+        for j in 1:2, k in 1:2, l in 1:2
+            f4 -= 8 * Γ * sin_t^3 * cos_t * (g[j]*g[k]*g[l] / (ω[j]*ω[k]*ω[l])) * P[j]*P[k]*P[l] * σx_ext
+            f4 += 4 * Γ * sin_t^2 * cos_t^2 * (g[j]*g[k]*g[l] / (ω[j]*ω[k])) * A[l] * P[j]*P[k]*P[l] * σz_ext
+        end
+        # (FIX 1: Missing Identity Term)
+        for j in 1:2, k in 1:2
+            f4 += 8 * Γ * sin_t^2 * cos_t^2 * (g[j]^2 * g[k] / (ω[j]*ω[k])) * B[j] * P[k] * Id_ext
+        end
     
-    # --- terms derived from C3(2): [Sx, [Sz, [Sx, L2]]] ---
-    # (FIX 2: Sign error on Identity term)
-    for j in 1:2, k in 1:2
-        f4 += 4 * Γ * sin_t^2 * cos_t^2 * (g[j]^2 * g[k] / (ω[j]*ω[k])) * B[j] * P[k] * Id_ext
-    end
-    for j in 1:2, k in 1:2, l in 1:2
-        inner = QuantumToolbox.commutator(X[j], P[k], anti=true)
-        ac_Pl = QuantumToolbox.commutator(P[l], inner, anti=true)
-        ac_Xl = QuantumToolbox.commutator(X[l], inner, anti=true)
+        # --- terms derived from C3(2): [Sx, [Sz, [Sx, L2]]] ---
+        # (FIX 2: Sign error on Identity term)
+        for j in 1:2, k in 1:2
+            f4 += 4 * Γ * sin_t^2 * cos_t^2 * (g[j]^2 * g[k] / (ω[j]*ω[k])) * B[j] * P[k] * Id_ext
+        end
+        for j in 1:2, k in 1:2, l in 1:2
+            inner = QuantumToolbox.commutator(X[j], P[k], anti=true)
+            ac_Pl = QuantumToolbox.commutator(P[l], inner, anti=true)
+            ac_Xl = QuantumToolbox.commutator(X[l], inner, anti=true)
         
-        f4 += 0.5 * Γ * sin_t * cos_t^3 * (g[j]*g[k]*g[l] / ω[k]) * B[j] * A[l] * ac_Pl * σy_ext
-        f4 -= 0.5 * Γ * sin_t * cos_t^3 * (g[j]*g[k]*g[l] / ω[k]) * B[j] * B[l] * ac_Xl * σx_ext
-    end
+            f4 += 0.5 * Γ * sin_t * cos_t^3 * (g[j]*g[k]*g[l] / ω[k]) * B[j] * A[l] * ac_Pl * σy_ext
+            f4 -= 0.5 * Γ * sin_t * cos_t^3 * (g[j]*g[k]*g[l] / ω[k]) * B[j] * B[l] * ac_Xl * σx_ext
+        end
     
-    # --- terms derived from C3(3): [Sx, [Sx, [Sx, L2]]] ---
-    for j in 1:2, k in 1:2, l in 1:2
-        inner = QuantumToolbox.commutator(X[j], P[k], anti=true)
-        ac_Pl = QuantumToolbox.commutator(P[l], inner, anti=true)
+        # --- terms derived from C3(3): [Sx, [Sx, [Sx, L2]]] ---
+        for j in 1:2, k in 1:2, l in 1:2
+            inner = QuantumToolbox.commutator(X[j], P[k], anti=true)
+            ac_Pl = QuantumToolbox.commutator(P[l], inner, anti=true)
         
-        # (FIX 3: Sign error on σy term)
-        f4 -= 0.5 * Γ * sin_t * cos_t^3 * (g[j]*g[k]*g[l] / ω[l]) * A[k] * B[j] * ac_Pl * σy_ext
-        f4 -= 2.0 * Γ * sin_t * cos_t^3 * (g[j]*g[k]*g[l] / ω[l]) * A[k] * A[j] * P[j]*P[k]*P[l] * σx_ext
+            # (FIX 3: Sign error on σy term)
+            f4 -= 0.5 * Γ * sin_t * cos_t^3 * (g[j]*g[k]*g[l] / ω[l]) * A[k] * B[j] * ac_Pl * σy_ext
+            f4 -= 2.0 * Γ * sin_t * cos_t^3 * (g[j]*g[k]*g[l] / ω[l]) * A[k] * A[j] * P[j]*P[k]*P[l] * σx_ext
         
-        ac_Xl = QuantumToolbox.commutator(X[l], inner, anti=true)
-        f4 += Γ * cos_t^4 * g[j]*g[k]*g[l] * A[k] * A[j]*A[l] * P[j]*P[k]*P[l] * σz_ext
-        f4 += 0.25 * Γ * cos_t^4 * g[j]*g[k]*g[l] * A[k] * B[j]*B[l] * ac_Xl * σz_ext
+            ac_Xl = QuantumToolbox.commutator(X[l], inner, anti=true)
+            f4 += Γ * cos_t^4 * g[j]*g[k]*g[l] * A[k] * A[j]*A[l] * P[j]*P[k]*P[l] * σz_ext
+            f4 += 0.25 * Γ * cos_t^4 * g[j]*g[k]*g[l] * A[k] * B[j]*B[l] * ac_Xl * σz_ext
+        end
+        # (FIX 4: Coefficient correction on Identity term)
+        for j in 1:2, k in 1:2
+            f4 += 3 * Γ * cos_t^4 * g[j]^2 * g[k] * A[k] * A[j] * B[j] * P[k] * Id_ext
+        end
     end
-    # (FIX 4: Coefficient correction on Identity term)
-    for j in 1:2, k in 1:2
-        f4 += 3 * Γ * cos_t^4 * g[j]^2 * g[k] * A[k] * A[j] * B[j] * P[k] * Id_ext
-    end
-
     # =========================================================
     # --- Final Assembly ---
     # =========================================================
     # BCH Series: e^S L0 e^-S = L0 + f1 + 1/2 f2 + 1/6 f3 + 1/24 f4
-    L_ext = L0 + f1 + (1.0/2.0)*f2 + (1.0/6.0)*f3 + (1.0/24.0)*f4
+    L_ext = L0 + f1 + (1.0/2.0)*f2 + (1.0/6.0)*f3 
+    if !is_3rd_order 
+        L_ext += (1.0/24.0)*f4
+        println("4th order version of L2 used")
+    end
     
     L_sub_mat = P_full_mat * L_ext.data * P_full_mat'
     L_sub = QuantumObject(L_sub_mat, type=Operator(), dims=dims_sys)
@@ -590,7 +606,133 @@ function L2_eff_4th_order(p::SystemParams, kp::Float64)
     return L_sub 
 end
 
-# they don't match
+function H_drive_eff_4th_order(p::SystemParams, F::Float64, is_3rd_order::Bool=false)
+    # --- System Parameters ---
+    g  = [p.g1, p.g2]
+    ω  = [p.ω1, p.ω2]
+    A  = [2*p.ω1/(p.ω1^2 - p.ωq^2), 2*p.ω2/(p.ω2^2 - p.ωq^2)]
+    B  = [2*p.ωq/(p.ω1^2 - p.ωq^2), 2*p.ωq/(p.ω2^2 - p.ωq^2)]
+    
+    # --- Operators ---
+    X  = [a1_ext + a1_ext', a2_ext + a2_ext']
+    P  = [1im * (a1_ext' - a1_ext), 1im * (a2_ext' - a2_ext)]
+    
+    sin_t  = sin(p.θ)
+    cos_t  = cos(p.θ)
+    
+    # --- Base Drive ---
+    H0_drive = - F * P[2]  # <--- FIXED: Added F back here
+    
+    # =========================================================
+    # --- 1st Order Commutators: [S, H_drive] ---
+    # =========================================================
+    
+    # [Sz, H_drive] = 0
+    # [Sx, H_drive]
+    C1 = - F * g[2] * B[2] * cos_t * σy_ext # <--- FIXED
+    
+    # =========================================================
+    # --- 2nd Order Commutators: [S, [S, H_drive]] ---
+    # =========================================================
+    C2 = 0.0 * Id_ext
+    for i in 1:2
+        # [Sz, [Sx, H_drive]]
+        C2 += 2 * F * g[2] * B[2] * cos_t * (g[i] * sin_t / ω[i]) * P[i] * σx_ext # <--- FIXED
+        
+        # [Sx, [Sx, H_drive]]
+        C2 += - F * g[2] * B[2] * cos_t * g[i] * cos_t * A[i] * P[i] * σz_ext # <--- FIXED
+    end
+    
+    # =========================================================
+    # --- 3rd Order Commutators: [S, [S, [S, H_drive]]] ---
+    # =========================================================
+    C3 = 0.0 * Id_ext
+    for i in 1:2, j in 1:2
+        # [Sz, [Sz, [Sx, H_drive]]]
+        C3 += 4 * F * g[2] * B[2] * cos_t * (g[i]*g[j]*sin_t^2)/(ω[i]*ω[j]) * P[i]*P[j] * σy_ext # <--- FIXED
+        
+        ac_XjPi = QuantumToolbox.commutator(X[j], P[i], anti = true)
+        
+        # [Sx, [Sz, [Sx, H_drive]]]
+        C3 += - F * g[2] * B[2] * cos_t^2 * (g[i]*g[j]*sin_t)/ω[i] * B[j] * ac_XjPi * σz_ext # <--- FIXED
+        
+        # [Sx, [Sx, [Sx, H_drive]]]
+        term_xxx_1 = A[j] * P[i] * P[j] * σy_ext
+        term_xxx_2 = -0.5 * B[j] * ac_XjPi * σx_ext
+        C3 += F * g[2] * B[2] * cos_t^3 * g[i]*g[j] * A[i] * (term_xxx_1 + term_xxx_2) # <--- FIXED
+    end
+    
+
+    if !is_3rd_order
+        # =========================================================
+        # --- 4th Order Commutators: [S, [S, [S, [S, H_drive]]]] ---
+        # =========================================================
+        C4 = 0.0 * Id_ext
+        
+        # --- Triple Sum Terms ---
+        for i in 1:2, j in 1:2, k in 1:2
+            inner_XjPi = QuantumToolbox.commutator(X[j], P[i], anti = true)
+            ac_Pk_XjPi = QuantumToolbox.commutator(P[k], inner_XjPi, anti = true)
+            ac_Xk_XjPi = QuantumToolbox.commutator(X[k], inner_XjPi, anti = true)
+            
+            # [Sz, [Sz, [Sz, [Sx, H_drive]]]]
+            C4 += -8 * F * g[2] * B[2] * cos_t * (g[i]*g[j]*g[k]*sin_t^3)/(ω[i]*ω[j]*ω[k]) * P[i]*P[j]*P[k] * σx_ext # <--- FIXED
+            
+            # [Sz, [Sx, [Sx, [Sx, H_drive]]]]
+            term_zxxx_1 = 2 * A[j] * P[i]*P[j]*P[k] * σx_ext
+            term_zxxx_2 = 0.5 * B[j] * ac_Pk_XjPi * σy_ext
+            C4 += - F * g[2] * B[2] * cos_t^3 * sin_t * (g[k]*g[i]*g[j])/ω[k] * A[i] * (term_zxxx_1 + term_zxxx_2) # <--- FIXED
+            
+            # [Sx, [Sz, [Sz, [Sx, H_drive]]]] (Delta/Triple component)
+            C4 += 4 * F * g[2] * B[2] * cos_t^2 * sin_t^2 * (g[i]*g[j]*g[k])/(ω[i]*ω[j]) * A[k] * P[i]*P[j]*P[k] * σz_ext # <--- FIXED
+            
+            # [Sx, [Sx, [Sz, [Sx, H_drive]]]]
+            term_xxzx_1 = B[k] * ac_Xk_XjPi * σx_ext
+            term_xxzx_2 = -A[k] * ac_Pk_XjPi * σy_ext
+            C4 += -0.5 * F * g[2] * B[2] * cos_t^3 * sin_t * (g[k]*g[i]*g[j])/ω[i] * B[j] * (term_xxzx_1 + term_xxzx_2) # <--- FIXED
+            
+            # [Sx, [Sx, [Sx, [Sx, H_drive]]]] (Delta/Triple component)
+            term_xxxx_1 = 2 * A[j]*A[k] * P[i]*P[j]*P[k]
+            term_xxxx_2 = 0.5 * B[j]*B[k] * ac_Xk_XjPi
+            C4 += 0.5 * F * g[2] * B[2] * cos_t^4 * g[i]*g[j]*g[k] * A[i] * (term_xxxx_1 + term_xxxx_2) * σz_ext # <--- FIXED
+        end
+
+        # --- Double Sum Terms (Evaluated Deltas) ---
+        for i in 1:2, j in 1:2
+            # [Sz, [Sx, [Sz, [Sx, H_drive]]]]
+            C4 += 4 * F * g[2] * B[2] * cos_t^2 * sin_t^2 * (g[j]^2 * g[i])/(ω[j]*ω[i]) * B[j] * P[i] # <--- FIXED
+            
+            # [Sx, [Sz, [Sz, [Sx, H_drive]]]] (Evaluated deltas component)
+            C4 += 4 * F * g[2] * B[2] * cos_t^2 * sin_t^2 * 2 * (g[i]*g[j]^2)/(ω[i]*ω[j]) * B[j] * P[i] # <--- FIXED
+            
+            # [Sx, [Sx, [Sx, [Sx, H_drive]]]] (Evaluated deltas component)
+            C4 += 0.5 * F * g[2] * B[2] * cos_t^4 * 6 * g[i]*g[j]^2 * A[i]*A[j]*B[j] * P[i] # <--- FIXED
+        end
+    end
+    
+    # =========================================================
+    # --- Construct Final Effective Drive & Subspace Projection ---
+    # =========================================================
+    
+    # BCH Expansion: H_eff = H0 + C1 + (1/2!)C2 + (1/3!)C3 + (1/4!)C4
+    H_drive_ext = H0_drive + C1 + (1.0 / 2.0)*C2 + (1.0 / 6.0)*C3 
+    
+    if !is_3rd_order
+        H_drive_ext += (1.0 / 24.0)*C4
+    end
+
+    # Project into the subspace using global or passed P_full_mat and dims_sys
+    H_drive_sub_mat = P_full_mat * H_drive_ext.data * P_full_mat'
+    H_drive_sub = QuantumObject(H_drive_sub_mat, type=Operator(), dims=dims_sys)
+    
+    return H_drive_sub
+end
+
+
+
+
+
+# they match
 function H_eff_RWA(p::SystemParams)
     # --- Setup Parameters ---
     g  = [p.g1, p.g2]
@@ -670,7 +812,7 @@ function H_eff_RWA(p::SystemParams)
             H4_RWA += -4 * sin_t^2 * cos_t^2 * (g[i]^2 * g[j]^2 / (ω[i]*ω[j])) * (B[i] + B[j]) * σz_ext
         end
     end
-    
+
     # [Sz, [Sx, [Sz, Vx]]]
     for i in 1:2, j in 1:2
         H4_RWA += -4 * cos_t^2 * sin_t^2 * (g[i]^2 * g[j]^2 / (ω[i]*ω[j])) * A[i] * n_2(i)
@@ -700,7 +842,8 @@ function H_eff_RWA(p::SystemParams)
         if i != j
             H4_RWA += 2 * cos_t^2 * sin_t^2 * g[i]^2 * g[j]^2 * (B[i]*A[j]/ω[j] - A[i]*B[j]/ω[i]) * n_2(i) * n_2(j) * σz_ext
         end
-        H4_RWA += 2 * cos_t^2 * sin_t^2 * (g[i]^2 * g[j]^2 / ω[j]) * (2*B[i]*B[j] - A[i]*A[j]) * n_2(i)
+        # CORRECTED LINE BELOW: Split denominators and removed the spurious factor of 2
+        H4_RWA += 2 * cos_t^2 * sin_t^2 * g[i]^2 * g[j]^2 * (B[i]*B[j]/ω[j] - A[i]*A[j]/ω[i]) * n_2(i)
     end
 
     # [Sx, [Sx, [Sx, Vx]]]
@@ -720,7 +863,8 @@ function H_eff_RWA(p::SystemParams)
     # --- Final Assembly ---
     # =========================================================
     H_ext_RWA = H0_RWA + H_filter_RWA + H_filter2_RWA + H2_RWA + H3_RWA + H4_RWA
-    
+  
+
     H_sub_mat = P_full_mat * H_ext_RWA.data * P_full_mat'
     H_sub = QuantumObject(H_sub_mat, type=Operator(), dims=dims_sys)
     
@@ -746,7 +890,7 @@ function H_eff_num_RWA(p::SystemParams)
     
     for i in 1:dim
         for j in 1:dim
-            if (N_ex_diag[i] != N_ex_diag[j]) || (N_q_diag[i] != N_q_diag[j])
+            if abs(N_ex_diag[i] - N_ex_diag[j]) > 0.1 || abs(N_q_diag[i] - N_q_diag[j]) > 0.1
                 H_dense[i, j] = 0.0
             end
         end
@@ -756,7 +900,7 @@ function H_eff_num_RWA(p::SystemParams)
     # 4. FIX: Shift to the Rotating Frame!
     # Mode 1 rotates at ωd/2, Mode 2 at ωd, Mode P at ωd
     # =========================================================
-    H_rot_ext = (p.ωd / 2) * (a1_ext'*a1_ext) + p.ωd * (a2_ext'*a2_ext) + p.ωd * (ap_ext'*ap_ext)
+    H_rot_ext = (p.ωd / 2) * (a1_ext'*a1_ext) + p.ωd * (a2_ext'*a2_ext) + p.ωd * (ap_ext'*ap_ext) #+ (p.ωd / 2) * σz_ext
     H_rot_sub = P_full_mat * H_rot_ext.data * P_full_mat'
     
     # Subtract the rotation to get the exact RWA H0 (Δ1, Δ2, ΔP)
@@ -890,8 +1034,8 @@ function H_drive_num_RWA(H_drive_qobj::QuantumObject)
             # and leave the qubit in its current state.
             ΔN_ex = abs(N_ex_diag[i] - N_ex_diag[j])
             ΔN_q  = abs(N_q_diag[i] - N_q_diag[j])
-            
-            if (ΔN_ex != 2) || (ΔN_q != 0)
+
+            if abs(ΔN_ex - 2) > 0.1 || abs(ΔN_q) > 0.1
                 H_d_dense[i, j] = 0.0
             end
         end

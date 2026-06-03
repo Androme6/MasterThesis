@@ -23,7 +23,7 @@ println("Gap at optimal ω2 (full) = ", round(results_full[7], digits=12))
 display(results_full[5])  # Plot for ω2 sweep
 #display(results_full[6])  # Plot for ωp sweep
 
-results_eff = get_optimal_frequency(H_eff_4th_order_RWA, params)
+results_eff = get_optimal_frequency(H_eff, params)
 println("Optimal ω2 (eff) = ", round(results_eff[1], digits=12))
 println("ω2 dressed (eff) = ", round(results_eff[2], digits=12))
 #println("Optimal ωp (eff) = ", round(results_eff[3], digits=6))
@@ -43,7 +43,7 @@ println("Gap at optimal ω2 (num) = ", round(results_num[7], digits=12))
 display(results_num[5])  # Plot for ω2 sweep
 #display(results_num[6])  # Plot for ωp sweep
 
-fig_compare = compare(results_full[10], results_eff[10], results_num[10], results_full[11], results_eff[11], results_num[11], results_full[1], results_eff[1], results_num[1], results_full[2], results_eff[2], results_num[2])
+fig_compare = compare(results_full[10], results_eff[10], results_num[10], results_full[11], results_eff[11], results_num[11], results_full[1], results_eff[1], results_num[1], results_full[2], results_eff[2], results_num[2], results_full[7], results_eff[7], results_num[7])
 display(fig_compare)
 
 
