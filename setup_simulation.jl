@@ -87,14 +87,14 @@ function prepare_simulation(params::SystemParams, H_fun, F, kp, k1 = 5e-6, find_
     psi0_dressed_mat = ket2dm(psi0_dressed)
     psi0_dressed_gpu = cu(psi0_dressed_mat)
 
-    return L_cpu_concrete, L_tot_gpu, psi0_dressed_gpu, V_mat, params
+    return L_cpu_concrete, L_tot_gpu, psi0_dressed_gpu, V_mat, params, is_RWA
 end
 
 function run_simulation(params::SystemParams, H_fun, filename, F, kp, tmax, t_selected, nframes, save_dir, k1 = 5e-6, find_resonance = true)
 
     matrix_form = Val(true)
     mkpath(save_dir)
-    L_cpu_concrete, L_tot_gpu, psi0_dressed_gpu, V_mat, params = prepare_simulation(params::SystemParams, H_fun, F, kp, k1, find_resonance, matrix_form)
+    L_cpu_concrete, L_tot_gpu, psi0_dressed_gpu, V_mat, params, is_RWA = prepare_simulation(params::SystemParams, H_fun, F, kp, k1, find_resonance, matrix_form)
 
     # 4. Time Evolution
     println("Time evolution on GPU...")
