@@ -7,7 +7,7 @@ using Dates
 using JLD2
 using LinearAlgebra
 
-const N1 = 22
+const N1 = 40
 const N2 = 4
 const Np = 1
 const Nq = 2
@@ -59,6 +59,7 @@ function H_ideal(p::SystemParams)
     numerator = 3 * sqrt(2) * p.g2 * (p.g1^2) * (p.ωq^2) * sin(2 * p.θ) * cos(p.θ)
     denominator = 4 * (p.ω1^4) - 5 * (p.ω1^2) * (p.ωq^2) + (p.ωq^4)
     g_eff = numerator / denominator  
+    println(g_eff)
     H = g_eff * (a1_ext * a1_ext * a2_ext' + a1_ext' * a1_ext' * a2_ext) 
     H_sub = QuantumObject(P_full_mat * H.data * P_full_mat', type=Operator(), dims=dims_sys)
     return H_sub
@@ -731,7 +732,6 @@ end
 
 
 
-
 # they match
 function H_eff_RWA(p::SystemParams)
     # --- Setup Parameters ---
@@ -751,11 +751,11 @@ function H_eff_RWA(p::SystemParams)
     n = [a1_ext'*a1_ext, a2_ext'*a2_ext]
     nP = ap_ext'*ap_ext
     
-    # Bosonic RWA Helper Functions
-    # 2n_i + 1
     n_2(i) = 2 * n[i] + Id_ext
-    # 2n_i^2 + 2n_i + 1
     n_sq(i) = 2 * n[i]*n[i] + 2 * n[i] + Id_ext 
+
+    # Projector for the σz = -1 subspace
+    P_minus_ext = (Id_ext - σz_ext) / 2.0
 
     # =========================================================
     # --- Free Hamiltonian & Filter (RWA) ---
@@ -764,95 +764,82 @@ function H_eff_RWA(p::SystemParams)
     Δ2 = p.ω2 - p.ωd
     ΔP = p.ωp - p.ωd
     
-    H0_RWA = Δ1 * n[1] + Δ2 * n[2] + ΔP * nP + (p.ωq / 2) * σz_ext
+    H0_RWA = Δ1 * n[1] + Δ2 * n[2] + ΔP * nP - (p.ωq / 2) * Id_ext
     H_filter_RWA = p.g2p * (a[2]' * ap_ext + a[2] * ap_ext')
 
     # =========================================================
-    # --- 2nd Order Filter Commutators (RWA): (1/2)[S, [S, H_filter]] ---
+    # --- 2nd Order Filter Commutators ---
     # =========================================================
     sum_filter = sum(g[j] * gp[j] * A[j] for j in 1:2)
-    H_filter2_RWA = 0.5 * cos_t^2 * g[2] * B[2] * sum_filter * (a[2]' * ap_ext + a[2] * ap_ext') * σz_ext
+    H_filter2_RWA = -0.5 * cos_t^2 * g[2] * B[2] * sum_filter * (a[2]' * ap_ext + a[2] * ap_ext')
 
     # =========================================================
-    # --- 2nd Order Commutators (RWA): (1/2)[S, H_Rabi] ---
+    # --- 2nd Order Commutators ---
     # =========================================================
     H2_RWA = 0.0 * Id_ext
     for i in 1:2
-        # [Sz, Vz]_RWA
         H2_RWA += 0.5 * (-2 * sin_t^2 * g[i]^2 / ω[i]) * Id_ext
-        
-        # [Sx, Vx]_RWA
         H2_RWA += 0.5 * (-cos_t^2 * g[i]^2 * A[i]) * Id_ext
-        H2_RWA += 0.5 * (-cos_t^2 * g[i]^2 * B[i]) * n_2(i) * σz_ext
+        H2_RWA += 0.5 * (cos_t^2 * g[i]^2 * B[i]) * n_2(i)
     end
 
     # =========================================================
-    # --- 3rd Order Commutators (RWA): (1/3)[S, [S, H_Rabi]] ---
+    # --- 3rd Order Commutators ---
     # =========================================================
-    # 3-wave mixing pumping mechanism: a1^2 a2' + (a1')^2 a2
     pump_op = a[1]*a[1]*a[2]' + a[1]'*a[1]'*a[2]
     
     term_3rd_Sz = cos_t * sin_2t * g[1]^2 * g[2] * ( (A[2] - A[1])/ω[1] + A[1]/ω[2] )
     term_3rd_Sx = -0.5 * cos_t * sin_2t * g[1]^2 * g[2] * ( A[1]*(2*A[2] - A[1]) + B[1]*(B[1] + 2*B[2]) )
     
-    H3_RWA = (1.0 / 3.0) * (term_3rd_Sz + term_3rd_Sx) * pump_op * σz_ext
+    H3_RWA = -(1.0 / 3.0) * (term_3rd_Sz + term_3rd_Sx) * pump_op
 
     # =========================================================
-    # --- 4th Order Commutators (RWA): (1/8)[S, [S, [S, H_Rabi]]] ---
+    # --- 4th Order Commutators ---
     # =========================================================
     H4_RWA = 0.0 * Id_ext
 
-    # --- 4.1 From commutators with Sz outer generators ---
-    # [Sz, [Sz, [Sx, Vx]]]
     for i in 1:2
-        H4_RWA += -4 * sin_t^2 * cos_t^2 * (g[i]^4 / ω[i]^2) * 2 * B[i] * σz_ext
+        H4_RWA += 4 * sin_t^2 * cos_t^2 * (g[i]^4 / ω[i]^2) * 2 * B[i] * Id_ext
     end
     for i in 1:2, j in 1:2
         if i != j
-            H4_RWA += -4 * sin_t^2 * cos_t^2 * (g[i]^2 * g[j]^2 / (ω[i]*ω[j])) * (B[i] + B[j]) * σz_ext
+            H4_RWA += 4 * sin_t^2 * cos_t^2 * (g[i]^2 * g[j]^2 / (ω[i]*ω[j])) * (B[i] + B[j]) * Id_ext
         end
     end
 
-    # [Sz, [Sx, [Sz, Vx]]]
     for i in 1:2, j in 1:2
         H4_RWA += -4 * cos_t^2 * sin_t^2 * (g[i]^2 * g[j]^2 / (ω[i]*ω[j])) * A[i] * n_2(i)
-        H4_RWA += -4 * cos_t^2 * sin_t^2 * (g[i]^2 * g[j]^2 / (ω[i]*ω[j])) * B[i] * σz_ext
+        H4_RWA += 4 * cos_t^2 * sin_t^2 * (g[i]^2 * g[j]^2 / (ω[i]*ω[j])) * B[i] * Id_ext
     end
 
-    # [Sz, [Sx, [Sx, Vz]]]
     for i in 1:2, j in 1:2
         H4_RWA += 2 * cos_t^2 * sin_t^2 * (g[i]^2 * g[j]^2 / ω[j]) * (A[i]^2 + 2*B[i]*B[j] + B[i]^2) * n_2(i)
-        H4_RWA += 2 * cos_t^2 * sin_t^2 * (g[i]^2 * g[j]^2 / ω[j]) * A[i] * (2*B[i] + B[j]) * σz_ext
+        H4_RWA -= 2 * cos_t^2 * sin_t^2 * (g[i]^2 * g[j]^2 / ω[j]) * A[i] * (2*B[i] + B[j]) * Id_ext
     end
 
-    # --- 4.2 From commutators with Sx outer generators ---
-    # [Sx, [Sz, [Sz, Vx]]]
     for i in 1:2
-        H4_RWA += 4 * cos_t^2 * sin_t^2 * (g[i]^4 / ω[i]^2) * B[i] * n_sq(i) * σz_ext
+        H4_RWA -= 4 * cos_t^2 * sin_t^2 * (g[i]^4 / ω[i]^2) * B[i] * n_sq(i)
     end
     for i in 1:2, j in 1:2
         if i != j
-            H4_RWA += 4 * cos_t^2 * sin_t^2 * (g[i]^2 * g[j]^2 / ω[i]^2) * B[j] * n_2(i) * n_2(j) * σz_ext
+            H4_RWA -= 4 * cos_t^2 * sin_t^2 * (g[i]^2 * g[j]^2 / ω[i]^2) * B[j] * n_2(i) * n_2(j)
         end
         H4_RWA += 4 * cos_t^2 * sin_t^2 * (g[i]^2 * g[j]^2 / ω[i]^2) * A[j] * n_2(i)
     end
 
-    # [Sx, [Sz, [Sx, Vz]]]
     for i in 1:2, j in 1:2
         if i != j
-            H4_RWA += 2 * cos_t^2 * sin_t^2 * g[i]^2 * g[j]^2 * (B[i]*A[j]/ω[j] - A[i]*B[j]/ω[i]) * n_2(i) * n_2(j) * σz_ext
+            H4_RWA -= 2 * cos_t^2 * sin_t^2 * g[i]^2 * g[j]^2 * (B[i]*A[j]/ω[j] - A[i]*B[j]/ω[i]) * n_2(i) * n_2(j)
         end
-        # CORRECTED LINE BELOW: Split denominators and removed the spurious factor of 2
         H4_RWA += 2 * cos_t^2 * sin_t^2 * g[i]^2 * g[j]^2 * (B[i]*B[j]/ω[j] - A[i]*A[j]/ω[i]) * n_2(i)
     end
 
-    # [Sx, [Sx, [Sx, Vx]]]
     for i in 1:2
-        H4_RWA += cos_t^4 * g[i]^4 * B[i] * (A[i]^2 + 3*B[i]^2) * n_sq(i) * σz_ext
+        H4_RWA -= cos_t^4 * g[i]^4 * B[i] * (A[i]^2 + 3*B[i]^2) * n_sq(i)
     end
     for i in 1:2, j in 1:2
         if i != j
-            H4_RWA += cos_t^4 * g[i]^2 * g[j]^2 * (B[i]*A[j]^2 + B[i]*B[j]^2 + 2*B[i]^2*B[j]) * n_2(i) * n_2(j) * σz_ext
+            H4_RWA -= cos_t^4 * g[i]^2 * g[j]^2 * (B[i]*A[j]^2 + B[i]*B[j]^2 + 2*B[i]^2*B[j]) * n_2(i) * n_2(j)
         end
         H4_RWA += cos_t^4 * g[i]^2 * g[j]^2 * A[j]*B[i] * (3*B[j] + B[i]) * n_2(i)
     end
@@ -862,9 +849,9 @@ function H_eff_RWA(p::SystemParams)
     # =========================================================
     # --- Final Assembly ---
     # =========================================================
-    H_ext_RWA = H0_RWA + H_filter_RWA + H_filter2_RWA + H2_RWA + H3_RWA + H4_RWA
+    # Apply the Projector to cleanly zero out the +1 subspace
+    H_ext_RWA = (H0_RWA + H_filter_RWA + H_filter2_RWA + H2_RWA + H3_RWA + H4_RWA) * P_minus_ext
   
-
     H_sub_mat = P_full_mat * H_ext_RWA.data * P_full_mat'
     H_sub = QuantumObject(H_sub_mat, type=Operator(), dims=dims_sys)
     
@@ -873,6 +860,7 @@ end
 function H_eff_num_RWA(p::SystemParams)
     # 1. Get the full 4th-order effective model (in the LAB frame)
     H_eff_qobj = H_eff_4th_order(p)
+    H_dense = Array(H_eff_qobj.data)
     
     # 2. Build the RWA conservation operators
     N_ex_ext = (a1_ext'*a1_ext) + 2*(a2_ext'*a2_ext) + 2*(ap_ext'*ap_ext)
@@ -884,33 +872,83 @@ function H_eff_num_RWA(p::SystemParams)
     N_ex_diag = round.(real.(diag(N_ex_sub)), digits=3)
     N_q_diag  = round.(real.(diag(N_q_sub)), digits=3)
     
-    # 3. Scrub the Hamiltonian matrix
-    H_dense = Array(H_eff_qobj.data)
-    dim = size(H_dense, 1)
-    
-    for i in 1:dim
-        for j in 1:dim
-            if abs(N_ex_diag[i] - N_ex_diag[j]) > 0.1 || abs(N_q_diag[i] - N_q_diag[j]) > 0.1
-                H_dense[i, j] = 0.0
-            end
-        end
-    end
-    
-    # =========================================================
-    # 4. FIX: Shift to the Rotating Frame!
-    # Mode 1 rotates at ωd/2, Mode 2 at ωd, Mode P at ωd
-    # =========================================================
-    H_rot_ext = (p.ωd / 2) * (a1_ext'*a1_ext) + p.ωd * (a2_ext'*a2_ext) + p.ωd * (ap_ext'*ap_ext) #+ (p.ωd / 2) * σz_ext
+    # 3. Shift to the Rotating Frame FIRST!
+    H_rot_ext = (p.ωd / 2) * (a1_ext'*a1_ext) + p.ωd * (a2_ext'*a2_ext) + p.ωd * (ap_ext'*ap_ext) #+ p.ωd/2 * σz_ext
     H_rot_sub = P_full_mat * H_rot_ext.data * P_full_mat'
     
     # Subtract the rotation to get the exact RWA H0 (Δ1, Δ2, ΔP)
     H_dense_rot = H_dense - Array(H_rot_sub)
+    
+    # 4. Scrub the Hamiltonian matrix AFTER rotating frame
+    dim = size(H_dense_rot, 1)
+    
+    for i in 1:dim
+        for j in 1:dim
+            # Zero out RWA-violating elements AND project onto σz = -1
+            if abs(N_ex_diag[i] - N_ex_diag[j]) > 0.1 || N_q_diag[i] > -0.5 || N_q_diag[j] > -0.5
+                H_dense_rot[i, j] = 0.0
+            end
+        end
+    end
 
     return QuantumObject(sparse(H_dense_rot), type=Operator(), dims=dims_sys)
 end
 
+function L2_eff_num_RWA(L_eff_qobj::QuantumObject)
+    L_dense = Array(L_eff_qobj.data)
+    dim = size(L_dense, 1)
+
+    n1_diag = round.(real.(diag(P_full_mat * (a1_ext'*a1_ext).data * P_full_mat')), digits=3)
+    n2_diag = round.(real.(diag(P_full_mat * (a2_ext'*a2_ext).data * P_full_mat')), digits=3)
+    np_diag = round.(real.(diag(P_full_mat * (ap_ext'*ap_ext).data * P_full_mat')), digits=3)
+    nq_diag = round.(real.(diag(P_full_mat * σz_ext.data * P_full_mat')), digits=3)
+
+    tol = 0.1
+    for i in 1:dim, j in 1:dim
+        # j = initial, i = final  →  positive delta = loss
+        d1 = n1_diag[j] - n1_diag[i]
+        d2 = n2_diag[j] - n2_diag[i]
+        dp = np_diag[j] - np_diag[i]
+
+        # single mode-1 photon loss: Δn1 = +1 or +2, others unchanged
+        keep_m1 = (abs(d1 - 1.0) < tol || abs(d1 - 2.0) < tol) && abs(d2) < tol && abs(dp) < tol
+        # single mode-2 photon loss: Δn2 = +1, others unchanged
+        keep_m2 = abs(d2 - 1.0) < tol && abs(d1) < tol && abs(dp) < tol
+
+        qubit_gs = nq_diag[i] <= -0.5 && nq_diag[j] <= -0.5
+
+        if !((keep_m1 || keep_m2) && qubit_gs)
+            L_dense[i, j] = 0.0
+        end
+    end
+    return QuantumObject(sparse(L_dense), type=Operator(), dims=dims_sys)
+end
+function H_drive_num_RWA(H_drive_qobj::QuantumObject)
+    # Get diagonals of the effective excitation number and qubit state
+    N_ex_diag = round.(real.(diag(P_full_mat * ((a1_ext'*a1_ext) + 2*(a2_ext'*a2_ext) + 2*(ap_ext'*ap_ext)).data * P_full_mat')), digits=3)
+    N_q_diag  = round.(real.(diag(P_full_mat * σz_ext.data * P_full_mat')), digits=3)
+
+    H_d_dense = Array(H_drive_qobj.data)
+    dim = size(H_d_dense, 1)
+
+    for i in 1:dim
+        for j in 1:dim
+            # 1. Drive creates/destroys exactly 2 effective quanta
+            ΔN_ex = abs(N_ex_diag[i] - N_ex_diag[j])
+
+            # 2. Zero out RWA-violating elements AND project onto σz = -1
+            if abs(ΔN_ex - 2) > 0.1 || N_q_diag[i] > -0.5 || N_q_diag[j] > -0.5
+                H_d_dense[i, j] = 0.0
+            end
+        end
+    end
+
+    return QuantumObject(sparse(H_d_dense), type=Operator(), dims=dims_sys)
+end
+
+
 # they match
-function L2_eff_RWA(p::SystemParams, kp::Float64)
+function jump_eff_RWA(p::SystemParams, kp::Float64)
     # --- Setup Parameters ---
     g  = [p.g1, p.g2]
     ω  = [p.ω1, p.ω2]
@@ -983,7 +1021,7 @@ function L2_eff_RWA(p::SystemParams, kp::Float64)
     
     return C_jumps[1], C_jumps[2]
 end
-function L2_eff_num_RWA(L_eff_qobj::QuantumObject)
+function jump_eff_num_RWA(L_eff_qobj::QuantumObject)
     L_dense = Array(L_eff_qobj.data)
     dim = size(L_dense, 1)
     
@@ -1017,29 +1055,4 @@ function L2_eff_num_RWA(L_eff_qobj::QuantumObject)
 
     return QuantumObject(sparse(C1_dense), type=Operator(), dims=dims_sys), 
            QuantumObject(sparse(C2_dense), type=Operator(), dims=dims_sys)
-end
-
-
-function H_drive_num_RWA(H_drive_qobj::QuantumObject)
-    # Get diagonals of the effective excitation number and qubit state
-    N_ex_diag = round.(real.(diag(P_full_mat * ((a1_ext'*a1_ext) + 2*(a2_ext'*a2_ext) + 2*(ap_ext'*ap_ext)).data * P_full_mat')), digits=3)
-    N_q_diag  = round.(real.(diag(P_full_mat * σz_ext.data * P_full_mat')), digits=3)
-
-    H_d_dense = Array(H_drive_qobj.data)
-    dim = size(H_d_dense, 1)
-
-    for i in 1:dim
-        for j in 1:dim
-            # Keep ONLY terms that create/destroy exactly 2 effective quanta (the drive frequency)
-            # and leave the qubit in its current state.
-            ΔN_ex = abs(N_ex_diag[i] - N_ex_diag[j])
-            ΔN_q  = abs(N_q_diag[i] - N_q_diag[j])
-
-            if abs(ΔN_ex - 2) > 0.1 || abs(ΔN_q) > 0.1
-                H_d_dense[i, j] = 0.0
-            end
-        end
-    end
-
-    return QuantumObject(sparse(H_d_dense), type=Operator(), dims=dims_sys)
 end
