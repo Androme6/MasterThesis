@@ -1,7 +1,6 @@
 include("setup_simulation.jl")
 
 function gap_finder(params::SystemParams, H_fun, F_list, kp, tmax, nframes, filename, save_dir)
-
     n1_avg = Float64[]
     gap = Float64[]
 
@@ -15,42 +14,45 @@ function gap_finder(params::SystemParams, H_fun, F_list, kp, tmax, nframes, file
 
     @showprogress "Sweeping F..." for F in F_list
         
-        out = run_simulation(params, H_fun, filename, F, kp, tmax, tmax, nframes, save_dir, false)
+        out = run_simulation(params, H_fun, filename, F, kp, tmax, tmax, nframes, save_dir, 5e-6, false)
+        
+        push!(n1_avg, out.expect_n1[end])
+        println("  -> Steady State ⟨a₁† a₁⟩ = ", out.expect_n1[end])
+        
+        vals, _ = eigenstates(
+                    out.L_cpu; 
+                    sparse = true, 
+                    sigma = 0.0,     # Targets the absolute slowest rates in the system
+                    eigvals = 8,     # Collect enough eigenvalues to see past the steady states
+                    krylovdim = 40
+                )
 
-        push!(n1_avg, real(out.expect_n1[end]))
-       
-       
-        L_cpu = out.L_cpu 
+        real_parts = sort(real.(vals), rev=true)
+
+        current_gap = NaN
+        for val in real_parts
+            if val < -1e-17
+                current_gap = abs(val)
+                break
+            end
+        end
         
-        vals_cpu, _ = eigenstates(
-            L_cpu;
-            sparse=true,
-            sigma = 0.01,
-            eigvals=5, 
-            krylovdim=30
-        )
-        
-    
-        real_parts = sort(real.(vals_cpu), rev=true) 
-        
-        # real_parts[1] will be the steady state (~ 0.0)
-        # real_parts[2] is the true global Liouvillian gap
-        current_gap = abs(real_parts[2])
         push!(gap, current_gap)
-    
+        println("  -> True Bit-Flip Gap: ", current_gap)
     end
 
+    # Plotting
     fig = Figure(size = (800, 600))
     ax = Axis(fig[1, 1], 
         ylabel = L"\text{Liouvillian Gap}", 
         xlabel = L"\text{Steady State }⟨a₁^\dagger a₁⟩", 
-        title = L"\text{Liouvillian Gap vs} ⟨a₁^\dagger a₁⟩"
+        title = L"\text{Exponential Closing Gap}",
+        yscale = log10
     )
-    
-    lines!(ax, n1_avg, gap, linewidth = 2, color = :blue)
-    CairoMakie.scatter!(ax, n1_avg, gap, markersize = 12, color = :blue)
-
+    lines!(ax, n1_avg, gap, linewidth = 2.5, color = :darkred)
+    CairoMakie.scatter!(ax, n1_avg, gap, markersize = 12, color = :darkred)
     CairoMakie.save(save_dir * "\\gap_output.png", fig, px_per_unit = 2) 
-
-    return n1_avg, gap, fig
+    display(fig)
+    
+    return  n1_avg, gap, fig
 end

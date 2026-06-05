@@ -18,8 +18,8 @@ t_selected = tmax
 nframes = 500
 
 ###########
-H_fun = H_ideal
-filename = "Ideal"
+H_fun = H_eff_num_RWA
+filename = "RWA"
 ###########
 
 timestamp = Dates.format(now(), "yyyy-mm-dd_HHMMSS")
