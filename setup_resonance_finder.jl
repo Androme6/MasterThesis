@@ -7,6 +7,11 @@ function get_optimal_frequency(H_fun, p, ω2_lower_bound = 1.9, ω2_upper_bound 
     ω2_list = range(ω2_lower_bound * p.ω1, ω2_upper_bound * p.ω1, length=400)
     ωp_list = range(ωp_lower_bound * p.ω1, ωp_upper_bound * p.ω1, length=400)
        
+    if H_fun == H_eff_RWA || H_fun == H_RWA_qubit
+        upper_index_2 = 6
+        lower_index_2 = 5
+    end
+
     #ω2 part
     #ωp = 2.0*p.ω1 + 10.0*p.g2p
     #p.ωp = ωp
