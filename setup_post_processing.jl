@@ -124,6 +124,6 @@ function analysis_and_plots(states_cpu_mats, V_mat, t, t_selected, params, expec
     fig_master = plotting(t, expect_n1, expect_n2, expect_np, rho_mode1_rotated, W_cat, xvec, yvec, t_selected_idx, save_dir, filename)
     
     # Generate and Save Text Logs
-    text_summary(params, expect_n1, expect_n2, expect_np, F, kp, N1, N2, Np, Nq, save_dir, filename)
+    text_summary(params, expect_n1, expect_n2, expect_np, N1, N2, Np, Nq, save_dir, filename)
     return fig_master
 end
