@@ -7,7 +7,7 @@ function get_optimal_frequency(H_fun, p, ω2_lower_bound = 1.9, ω2_upper_bound 
     ω2_list = range(ω2_lower_bound * p.ω1, ω2_upper_bound * p.ω1, length=400)
     ωp_list = range(ωp_lower_bound * p.ω1, ωp_upper_bound * p.ω1, length=400)
        
-    if H_fun == H_eff_RWA || H_fun == H_RWA_qubit
+    if H_fun == H_eff_RWA || H_fun == H_RWA_qubit || H_fun == H_qubit
         upper_index_2 = 6
         lower_index_2 = 5
     end
@@ -18,6 +18,7 @@ function get_optimal_frequency(H_fun, p, ω2_lower_bound = 1.9, ω2_upper_bound 
     #sweep
     eigenvalues = @showprogress mapreduce(hcat, ω2_list) do ω2
             p.ω2 = ω2
+            p.g2 = p.g1 * sqrt(p.ω2) / sqrt(p.ω1)
             p.g1p = p.g2p * sqrt(p.ω1) / sqrt(p.ω2)
             H = H_fun(p)    
             eigenstates(H, sparse = true, sigma = -p.ωq, eigvals = 7).values
@@ -33,7 +34,7 @@ function get_optimal_frequency(H_fun, p, ω2_lower_bound = 1.9, ω2_upper_bound 
     #finding optimal point
     gap, idx_opt = findmin(real, eigenvalues[upper_index_2, :] - eigenvalues[lower_index_2, :])
     ω2_opt = ω2_list[idx_opt]
-    ω2_dressed = real(eigenvalues[upper_index_2, 1] - eigenvalues[1, 1])
+    ω2_dressed = real(eigenvalues[upper_index_2, idx_opt] + eigenvalues[lower_index_2, idx_opt] - 2*eigenvalues[1, idx_opt])/2.0
     vlines!(ax2, [ω2_opt / p.ω1], color = :black, linestyle = :dash, linewidth = 1.5, label = L"\omega_2^{\text{opt}}")
     hlines!(ax2, [ω2_dressed / p.ω1], color = :red, linestyle = :dash, linewidth = 1.5, label = L"\omega_2^{\text{dressed}}")
     axislegend(ax2, position = :lt)
@@ -69,6 +70,8 @@ function get_optimal_frequency(H_fun, p, ω2_lower_bound = 1.9, ω2_upper_bound 
     p_new = deepcopy(p)
     p_new.ω2 = ω2_opt
     p_new.ωd = ω2_dressed
+    p_new.g2 = p_new.g1 * sqrt(p_new.ω2) / sqrt(p_new.ω1)
+    
     #p_new.ωp = ωp_opt
     #p_new.g1p = p_new.g2p * sqrt(p_new.ω1) / sqrt(p_new.ω2)
     
