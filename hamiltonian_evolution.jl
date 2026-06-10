@@ -27,26 +27,20 @@ function hamiltonian_evolution(H, ωd, F, t, S)
 end
 
 params = SystemParams(
-    ω1 = 1.0, 
-    ω2 = 2.0, 
-    ωp = 100.0, 
-    ωq = 2.5, 
-    g1 = 0.1, 
-    g2 = 0.2,   
-    g2p = 0, 
-    θ = π / 6.0
+    ω1 = 5.0,  
+    θ = π / 6.0,
+    F = 0.025
 )
 
-F = 0.065
-tmax = 35000
-steps = 2000
-t = LinRange(0, tmax, steps)
+tmax = 3500
+nframes = 200
+t = LinRange(0, tmax, nframes)
 
-results_full = get_optimal_frequency(H_full, params, ω2_list, ωp_list, lower_index_2, upper_index_2, lower_index_p, upper_index_p)
-results_eff = get_optimal_frequency(H_eff, params, ω2_list, ωp_list, lower_index_2, upper_index_2, lower_index_p, upper_index_p)
-results_num = get_optimal_frequency(H_num, params, ω2_list, ωp_list, lower_index_2, upper_index_2, lower_index_p, upper_index_p)
+results_full = get_optimal_frequency(H_full, params)
+results_eff = get_optimal_frequency(H_eff_4th_order, params)
+results_num = get_optimal_frequency(H_num, params)
 Hfull = H_full(results_full[9])
-Heff = H_eff(results_eff[9])
+Heff = H_eff_4th_order(results_eff[9])
 Seff = SW_generator(results_eff[9])
 Hnum = H_num(results_num[9])
 Snum = SW_generator(results_num[9])
@@ -58,9 +52,9 @@ println("Optimal ω2 (num)= ", round(results_num[1], digits=6))
 println("ω2 dressed (num)= ", round(results_num[2], digits=6))
 
 
-sol_full, fig_wigner_full = hamiltonian_evolution(Hfull, results_full[2], F, t, 0.0*Id)
-sol_eff, fig_wigner_eff = hamiltonian_evolution(Heff, results_eff[2], F, t, Seff)
-sol_num, fig_wigner_num = hamiltonian_evolution(Hnum, results_num[2], F, t, Snum)
+sol_full, fig_wigner_full = hamiltonian_evolution(Hfull, results_full[2], results_full[9].F, t, 0.0*Id)
+sol_eff, fig_wigner_eff = hamiltonian_evolution(Heff, results_eff[2], results_eff[9].F, t, Seff)
+sol_num, fig_wigner_num = hamiltonian_evolution(Hnum, results_num[2], results_num[9].F, t, Snum)
 display(fig_wigner_full)
 display(fig_wigner_eff)
 display(fig_wigner_num)

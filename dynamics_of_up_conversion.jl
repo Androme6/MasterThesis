@@ -16,7 +16,9 @@ function Rabi_Oscillations(H, t, p)
     H_off = H(p_off)
     _, ψ, _ = eigenstates(H_off)
     idx_200g = findmax(vi -> fidelity(vi, psi_bare_200g), ψ[1:10])[2]
+    println("Fidelity 200g = ", fidelity(ψ[idx_200g], psi_bare_200g ))
     idx_010g = findmax(vi -> fidelity(vi, psi_bare_010g), ψ[1:10])[2]
+    println("Fidelity 010g = ", fidelity(ψ[idx_010g], psi_bare_010g ))
     #idx_001g = findmax(vi -> fidelity(vi, psi_bare_001g), ψ[1:10])[2]
     P_dressed_200g = ket2dm(ψ[idx_200g])
     P_dressed_010g = ket2dm(ψ[idx_010g])
@@ -91,28 +93,22 @@ end
 
 
 params = SystemParams(
-    ω1 = 1.0, 
-    ω2 = 2.0, 
-    ωp = 0, 
-    ωq = 3.0, 
-    g1 = 0.08, 
-    g2 = 0.16,   
-    g2p = 0, 
+    ω1 = 5.0,  
     θ = π / 6.0,
-    ωd = 0.0
+    F = 0.025
 )
 
-tmax = 10000
+tmax = 1000
 steps = 2000
 t = LinRange(0, tmax, steps)
 
 results_full = get_optimal_frequency(H_full, params)
-results_eff = get_optimal_frequency(H_eff, params)
+results_eff = get_optimal_frequency(H_eff_4th_order, params)
 results_num = get_optimal_frequency(H_num, params)
 
 
 sol_3WM, sol_filter, fig_3wm, fig_filter = Rabi_Oscillations(H_full, t, results_full[9])
-sol_3WM_eff, sol_filter_eff, fig_3wm_eff, fig_filter_eff = Rabi_Oscillations(H_eff, t, results_eff[9])
+sol_3WM_eff, sol_filter_eff, fig_3wm_eff, fig_filter_eff = Rabi_Oscillations(H_eff_4th_order, t, results_eff[9])
 sol_3WM_num, sol_filter_num, fig_3wm_num, fig_filter_num = Rabi_Oscillations(H_num, t, results_num[9])
 display(fig_3wm)
 #display(fig_filter)

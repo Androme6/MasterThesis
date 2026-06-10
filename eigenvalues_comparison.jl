@@ -53,19 +53,13 @@ function MonitorRegression(current_errors; filename="previous_errors.txt")
 end
 
 params = SystemParams(
-    ω1 = 1.0, 
-    ω2 = 2.0, 
-    ωp = 0, 
-    ωq = 2.5, 
-    g1 = 0.1, 
-    g2 = 0.2,   
-    g2p = 0, 
+    ω1 = 5.0,  
     θ = π / 6.0,
-    ωd = 0.0
+    F = 0.025
 )
 
 results_full = get_optimal_frequency(H_full, params)
-results_eff = get_optimal_frequency(H_eff_4th_order_RWA, params)
+results_eff = get_optimal_frequency(H_eff_4th_order, params)
 results_num = get_optimal_frequency(H_num, params)
 
 println("Optimal ω2 (full) = ", round(results_full[1], digits=6))
@@ -87,7 +81,6 @@ E_num      = real.(eigvals(Matrix(Hnum.data)))
 sort!(E_full)
 sort!(E_eff)
 sort!(E_num)
-
 num_levels = 30
 
 # Shift relative to the ground state

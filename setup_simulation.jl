@@ -6,7 +6,7 @@ include("Adapt_setup.jl")
 
 
 
-function prepare_simulation(params::SystemParams, H_fun, F, kp, k1 = 5e-6, find_resonance = true, matrix_form = Val(true), numerical_RWA = false)
+function prepare_simulation(params::SystemParams, H_fun, find_resonance = true, matrix_form = Val(true), numerical_RWA = false)
     
 
     is_effective_model = (H_fun != H_full && H_fun != H_ideal)
@@ -33,13 +33,13 @@ function prepare_simulation(params::SystemParams, H_fun, F, kp, k1 = 5e-6, find_
     # 2. Build H_drive_op and field_op
     if is_ideal
         println("Step 1: Ideal model")
-        H_drive_op = F *(a2 + a2')
+        H_drive_op = params.F *(a2 + a2')
         H += H_drive_op
     elseif is_effective_model
         println("Step 1: Effective or RWA or qubit or RWA-qubit model")
         S = SW_generator(params)
         field_op = L2_eff_4th_order(params, kp, is_3rd_order)
-        F_drive = (is_RWA || is_RWA_qubit || numerical_RWA) ? F / 2.0 : F
+        F_drive = (is_RWA || is_RWA_qubit || numerical_RWA) ? params.F / 2.0 : params.F
         H_drive_op = H_drive_eff_4th_order(params, F_drive, is_3rd_order)
         if is_RWA_qubit
             println("RWA-qubit model")
@@ -59,7 +59,7 @@ function prepare_simulation(params::SystemParams, H_fun, F, kp, k1 = 5e-6, find_
     else
         println("Step 1: Full model")
         field_op = 1im * sqrt(kp / params.ω2) * (a2 - a2')
-        H_drive_op = 1im * F * (a2 - a2')
+        H_drive_op = 1im * params.F * (a2 - a2')
     end
 
 
@@ -93,8 +93,9 @@ function prepare_simulation(params::SystemParams, H_fun, F, kp, k1 = 5e-6, find_
         L_drive_dressed_cpu = liouvillian(H_drive_dressed_qobj; matrix_form = matrix_form)
         L_drive_dressed_gpu = Adapt.adapt(CUSPARSE.CuSparseMatrixCSR, L_drive_dressed_cpu)
         
-        rho0_dressed_gpu = cu(ket2dm(fock(N1*N2*Np*Nq, 0; dims = dims_sys)))
-        #rho0_dressed_gpu = cu(QuantumObject(V_mat' * Array(ket2dm(tensor(fock(N1, 0), fock(N2, 0), fock(Np, 0), fock(Nq, 0))).data)* V_mat, type=Operator(), dims=dims_sys))
+        # Second wins
+        #rho0_dressed_gpu = cu(ket2dm(fock(N1*N2*Np*Nq, 0; dims = dims_sys)))
+        rho0_dressed_gpu = cu(QuantumObject(V_mat' * Array(ket2dm(tensor(fock(N1, 0), fock(N2, 0), fock(Np, 0), fock(Nq, 0))).data)* V_mat, type=Operator(), dims=dims_sys))
             
 
         if is_RWA || is_RWA_qubit || numerical_RWA
@@ -110,16 +111,17 @@ function prepare_simulation(params::SystemParams, H_fun, F, kp, k1 = 5e-6, find_
     return L_cpu_concrete, L_tot_gpu, rho0_dressed_gpu, V_mat, params, is_RWA, is_RWA_qubit
 end
 
-function run_simulation(params::SystemParams, H_fun, filename, F, kp, tmax, t_selected, nframes, save_dir, k1 = 5e-6, find_resonance = true, numerical_RWA = false)
+function run_simulation(params::SystemParams, H_fun, filename, tmax, t_selected, nframes, save_dir, find_resonance = true, numerical_RWA = false)
 
     matrix_form = Val(true)
     mkpath(save_dir)
-    L_cpu_concrete, L_tot_gpu, rho0_dressed_gpu, V_mat, params, is_RWA, is_RWA_qubit = prepare_simulation(params::SystemParams, H_fun, F, kp, k1, find_resonance, matrix_form, numerical_RWA)
+    L_cpu_concrete, L_tot_gpu, rho0_dressed_gpu, V_mat, params, is_RWA, is_RWA_qubit = prepare_simulation(params::SystemParams, H_fun, find_resonance, matrix_form, numerical_RWA)
 
     # 4. Time Evolution
     println("Time evolution on GPU...")
     t = LinRange(0.0, tmax, nframes)
 
+    flush(stdout)
     sol_gpu = mesolve(L_tot_gpu, rho0_dressed_gpu, t, 
                   reltol=1e-5, abstol=1e-7,
                   maxiters=1e9, matrix_form = matrix_form)
@@ -135,10 +137,10 @@ function run_simulation(params::SystemParams, H_fun, filename, F, kp, tmax, t_se
     timestamp = Dates.format(now(), "yyyy-mm-dd_HHMMSS")
     filename = filename * "_" * timestamp
     save_path_data = joinpath(save_dir, filename * ".jld2")
-    #save_simulation(save_path_data, states_cpu_mats, V_mat, t, params, F, kp, tmax, nframes, expect_n1, expect_n2, expect_np)
+    #save_simulation(save_path_data, states_cpu_mats, V_mat, t, params, tmax, nframes, expect_n1, expect_n2, expect_np)
 
     # 8. Plotting and Exporting
-    fig_master = analysis_and_plots(states_cpu_mats, V_mat, t, t_selected, params, expect_n1, expect_n2, expect_np, F, kp, N1, N2, Np, Nq, save_dir, filename, is_RWA, is_RWA_qubit, numerical_RWA)
+    fig_master = analysis_and_plots(states_cpu_mats, V_mat, t, t_selected, params, expect_n1, expect_n2, expect_np, N1, N2, Np, Nq, save_dir, filename, is_RWA, is_RWA_qubit, numerical_RWA)
 
     display(fig_master)
 

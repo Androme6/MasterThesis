@@ -2,15 +2,9 @@ include("setup.jl")
 include("setup_resonance_finder.jl")
 
 params = SystemParams(
-    ω1 = 1.0, 
-    ω2 = 2.0, 
-    ωp = 0.0, #2.0, 
-    ωq = 2.5,#2.5, 
-    g1 = 0.1,#0.1, 
-    g2 = 0.2,#0.2,   
-    g2p = 0, #0.02,
+    ω1 = 5.0,  
     θ = π / 6.0,
-    ωd = 0.0
+    F = 0.025
 )
 
 results_full = get_optimal_frequency(H_full, params)
@@ -23,7 +17,7 @@ println("Gap at optimal ω2 (full) = ", round(results_full[7], digits=12))
 display(results_full[5])  # Plot for ω2 sweep
 #display(results_full[6])  # Plot for ωp sweep
 
-results_eff = get_optimal_frequency(H_eff, params)
+results_eff = get_optimal_frequency(H_eff_4th_order, params)
 println("Optimal ω2 (eff) = ", round(results_eff[1], digits=12))
 println("ω2 dressed (eff) = ", round(results_eff[2], digits=12))
 #println("Optimal ωp (eff) = ", round(results_eff[3], digits=6))
@@ -43,7 +37,7 @@ println("Gap at optimal ω2 (num) = ", round(results_num[7], digits=12))
 display(results_num[5])  # Plot for ω2 sweep
 #display(results_num[6])  # Plot for ωp sweep
 
-fig_compare = compare(results_full[10], results_eff[10], results_num[10], results_full[11], results_eff[11], results_num[11], results_full[1], results_eff[1], results_num[1], results_full[2], results_eff[2], results_num[2], results_full[7], results_eff[7], results_num[7])
+fig_compare = compare(results_full[10], results_eff[10], results_num[10], results_full[11], results_eff[11], results_num[11], results_full[1], results_eff[1], results_num[1], results_full[2], results_eff[2], results_num[2], results_full[7], results_eff[7], results_num[7], params)
 display(fig_compare)
 
 

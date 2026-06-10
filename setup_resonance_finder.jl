@@ -80,33 +80,38 @@ function get_optimal_frequency(H_fun, p, ω2_lower_bound = 1.9, ω2_upper_bound 
     return ω2_opt, ω2_dressed, 0.0, 0.0, fig2, nothing, gap, 0.0, p_new, eigenvalues, ω2_list, 0.0, 0.0
 end
 
-function compare(eigenvals_full, eigenvals_eff, eigenvals_num, ω2_list_full, ω2_list_eff, ω2_list_num, ω2_opt_full, ω2_opt_eff, ω2_opt_num, ω2_dressed_full, ω2_dressed_eff, ω2_dressed_num, gap_full, gap_eff, gap_num)
+function compare(eigenvals_full, eigenvals_eff, eigenvals_num, ω2_list_full, ω2_list_eff, ω2_list_num, ω2_opt_full, ω2_opt_eff, ω2_opt_num, ω2_dressed_full, ω2_dressed_eff, ω2_dressed_num, gap_full, gap_eff, gap_num, params) # Added params as an argument
     fig_super = Figure(size = (800, 600))
     ax_super = Axis(fig_super[1, 1], 
-               xlabel = L"\omega_2/\omega_1", 
-               ylabel = L"E/\hbar\omega_1",
-               title = "Superimposed Frequency Sweep")
-    xlims!(ax_super, (ω2_opt_full + ω2_opt_eff + ω2_opt_num)/3 -0.1, (ω2_opt_full + ω2_opt_eff + ω2_opt_num)/3 +0.1)
-    ylims!(ax_super, (ω2_dressed_full + ω2_dressed_eff + ω2_dressed_num)/3 -2*(gap_full + gap_eff + gap_num)/3, (ω2_dressed_full + ω2_dressed_eff + ω2_dressed_num)/3 +2*(gap_full + gap_eff + gap_num)/3)
+                xlabel = L"\omega_2/\omega_1", 
+                ylabel = L"E/\hbar\omega_1",
+                title = "Superimposed Frequency Sweep")
+    
+    # Calculate the averages for centering
+    avg_opt_normalized = (ω2_opt_full + ω2_opt_eff + ω2_opt_num) / (3 * params.ω1)
+    avg_dressed_normalized = (ω2_dressed_full + ω2_dressed_eff + ω2_dressed_num) / (3 * params.ω1)
+    avg_gap_normalized = (gap_full + gap_eff + gap_num) / (3 * params.ω1)
+
+    # Apply limits matching the plotted data
+    xlims!(ax_super, avg_opt_normalized - 0.1, avg_opt_normalized + 0.1)
+    ylims!(ax_super, avg_dressed_normalized - 3*avg_gap_normalized, avg_dressed_normalized + 3*avg_gap_normalized)
 
     for i in 1:size(eigenvals_full, 1)
-        # We only add a label to the first line so the legend isn't cluttered with 7 entries
         lbl = i == 1 ? "Full model" : nothing
-        lines!(ax_super, ω2_list_full ./ params.ω1, real.(eigenvals_full[i, :] .- eigenvals_full[1, :]), 
-           linewidth=2, color=:blue, linestyle=:solid, label=lbl)
+        lines!(ax_super, ω2_list_full ./ params.ω1, real.(eigenvals_full[i, :] .- eigenvals_full[1, :]) ./ params.ω1, # Normalized Y data
+            linewidth=2, color=:blue, linestyle=:solid, label=lbl)
     end
     for i in 1:size(eigenvals_eff, 1)
-        # We only add a label to the first line so the legend isn't cluttered with 7 entries
         lbl = i == 1 ? "Effective Model" : nothing
-        lines!(ax_super, ω2_list_eff ./ params.ω1, real.(eigenvals_eff[i, :] .- eigenvals_eff[1, :]), 
-           linewidth=2, color=:red, linestyle=:solid, label=lbl)
+        lines!(ax_super, ω2_list_eff ./ params.ω1, real.(eigenvals_eff[i, :] .- eigenvals_eff[1, :]) ./ params.ω1, # Normalized Y data
+            linewidth=2, color=:red, linestyle=:solid, label=lbl)
     end
     for i in 1:size(eigenvals_num, 1)
-        # We only add a label to the first line so the legend isn't cluttered with 7 entries
         lbl = i == 1 ? "Numerical Model" : nothing
-        lines!(ax_super, ω2_list_num ./ params.ω1, real.(eigenvals_num[i, :] .- eigenvals_num[1, :]), 
-           linewidth=2, color=:green, linestyle=:dash, label=lbl)
+        lines!(ax_super, ω2_list_num ./ params.ω1, real.(eigenvals_num[i, :] .- eigenvals_num[1, :]) ./ params.ω1, # Normalized Y data
+            linewidth=2, color=:green, linestyle=:dash, label=lbl)
     end
+    
     axislegend(ax_super, position=:lt)
     
     return fig_super
