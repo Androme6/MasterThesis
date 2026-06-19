@@ -33,7 +33,8 @@ function prepare_simulation(params::SystemParams, H_fun, find_resonance = true, 
     # 2. Build H_drive_op and field_op
     if is_ideal || is_ideal_t
         println("Step 1: Ideal model")
-        H_drive_op = params.F *(a2 + a2')
+        F_drive = is_ideal ? params.F / 2.0 : params.F
+        H_drive_op = F_drive *(a2 + a2')
         c_ops = [sqrt(params.k2) * a2, sqrt(params.k1) * a1]
     elseif is_effective_model
         println("Step 1: Effective or RWA or qubit or RWA-qubit model")

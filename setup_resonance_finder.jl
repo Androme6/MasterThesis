@@ -272,3 +272,95 @@ function optimise_ωq_g1_landscape(H1, H2, params_base, ωq_list, g1_list)
     
     return fig_heat, opt_ωq, opt_g1, FOM_matrix, gap_matrix
 end
+
+
+function calculate_g_eff(p::SystemParams)
+    # Helper differences and sums:
+    Δ21 = p.ω2 - p.ω1  # Paper's Δ_{ab}
+    Δ12 = p.ω1 - p.ω2  # Paper's Δ_{ba}
+    Δ2q = p.ω2 - p.ωq  # Paper's Δ_{aq}
+    Δ1q = p.ω1 - p.ωq  # Paper's Δ_{bq}
+    Ω2q = p.ω2 + p.ωq  # Paper's Ω_{aq}
+    Ω1q = p.ω1 + p.ωq  # Paper's Ω_{bq}
+
+    # ==========================================
+    # 1. Full Off-Resonance Expression 
+    # (CORRECTED from Paper Eq. 20)
+    # ==========================================
+    prefactor = sqrt(2) * p.g2 * p.g1^2 * sin(p.θ)
+    
+    term_sin2 = sin(p.θ)^2 * (
+          1 / (p.ω2 * Δ12) 
+        - 1 / (p.ω1 * Δ12) 
+        - 1 / (2 * p.ω1^2)
+    )
+
+    term_cos2 = cos(p.θ)^2 * (
+          1 / ((Δ21 + p.ωq) * Ω2q) 
+        - 1 / (p.ω2 * (Δ21 + p.ωq)) 
+        - 1 / ((Δ21 + p.ωq) * Δ1q) 
+        + 1 / (p.ω1 * (Δ21 + p.ωq)) 
+        - 1 / (Δ21 * Ω2q) 
+        + 1 / (Δ21 * Δ1q) 
+        + 1 / ((2 * p.ω1 - p.ωq) * Δ1q)  # <--- THE FIX (Paper mistakenly had Ω2q here)
+        - 1 / (p.ω1 * (2 * p.ω1 - p.ωq)) 
+        - 1 / (2 * p.ω1 * Δ1q)
+    )
+
+    g_eff_full = prefactor * (term_sin2 + term_cos2)
+
+    # ==========================================
+    # 2. Simplified On-Resonance Expression (Paper Eq. 21)
+    # ==========================================
+    num = 3 * sqrt(2) * p.g2 * p.g1^2 * p.ωq^2 * sin(2 * p.θ) * cos(p.θ)
+    den = 4 * p.ω1^4 - 5 * p.ω1^2 * p.ωq^2 + p.ωq^4
+    g_eff_res = num / den
+
+    return (full = g_eff_full, resonant = g_eff_res)
+end
+
+function get_optimal_θ(H_fun, θ_list, params)
+
+    # 1. Run the numerical sweep
+    results = @showprogress mapreduce(hcat, θ_list) do θ
+            params.θ = θ
+            res = get_optimal_frequency(H_fun, params)
+            res
+    end
+
+    # 2. Extract the numerical results
+    gaps = getindex.(results[1, :], 7)
+    ω2_opts = getindex.(results[1, :], 1)
+    ω2_dresseds = getindex.(results[1, :], 2)
+    params_final = getindex.(results[1, :], 9)
+
+    gaps_analytical_full = [2 * calculate_g_eff(p).full for p in params_final]
+    gaps_analytical_res  = [2 * calculate_g_eff(p).resonant for p in params_final]
+
+    gap, idx_opt = findmax(gaps)
+    θ_opt = θ_list[idx_opt]   
+    
+    println("Best θ = ", θ_opt)
+    println("Corresponding gap =                             ", gap)
+    println("Corresponding ω2_opt =                          ", ω2_opts[idx_opt])
+    println("Corresponding ω2_dressed =                      ", ω2_dresseds[idx_opt])
+    println("Analytical gap =                                ", gaps_analytical_full[idx_opt])
+    println("Analytical gap (on resonance approximation) =   ", gaps_analytical_res[idx_opt])
+
+    # 5. Plotting
+    fig = Figure(size = (800, 600))
+    ax = CairoMakie.Axis(fig[1, 1], xlabel = L"\theta", ylabel = L"\text{Gap}", title = L"\text{Gap vs } \theta")
+    
+    # Plot the 3 comparison curves
+    lines!(ax, θ_list, gaps, linewidth=2, color=:blue, label="Numerical")
+    lines!(ax, θ_list, gaps_analytical_full, linewidth=2, color=:orange, linestyle=:dash, label="Analytical (Full)")
+    lines!(ax, θ_list, gaps_analytical_res, linewidth=2, color=:green, linestyle=:dot, label="Analytical (Resonant)")
+
+    # Plot the optimal point markers
+    vlines!(ax, [θ_opt], color = :black, linestyle = :dash, linewidth = 1.5, label = L"\theta_{\text{opt}}")
+    hlines!(ax, [gap], color = :red, linestyle = :dash, linewidth = 1.5, label = L"\text{gap}(\theta_{\text{opt}})")
+    
+    axislegend(ax, position = :lt)
+
+    return fig
+end
