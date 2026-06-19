@@ -7,7 +7,7 @@ using Dates
 using JLD2
 using LinearAlgebra
 
-const N1 = 20
+const N1 = 30
 const N2 = 4
 const Np = 1
 const Nq = 2
@@ -86,6 +86,11 @@ function H_ideal(p::SystemParams)
     return H_sub
 end
 
+function H_ideal_time(p::SystemParams)
+    H = H_ideal(p)
+    H += p.ω1 * a1'*a1 + p.ω2 * a2'*a2 + p.ωq * σz / 2
+    return H
+end
 
 
 
@@ -1025,4 +1030,28 @@ function perform_numerical_RWA(H::QuantumObject, H_drive_op::QuantumObject, para
 
     # Do not touch field_op, just return it as is to prevent double-dressing
     return H_drive_op_new
+end
+
+
+function calculate_updown_conversion_coeff(p::SystemParams)
+    # Define A_i and B_i exactly as written in the thesis
+    A1 = (2 * p.ω1) / (p.ω1^2 - p.ωq^2)
+    B1 = (2 * p.ωq) / (p.ω1^2 - p.ωq^2)
+    
+    A2 = (2 * p.ω2) / (p.ω2^2 - p.ωq^2)
+    B2 = (2 * p.ωq) / (p.ω2^2 - p.ωq^2)
+    
+    # Calculate the overall prefactor: g1^2 * g2 * cos(θ) * sin(2θ)
+    prefactor = p.g1^2 * p.g2 * cos(p.θ) * sin(2 * p.θ)
+    
+    # Calculate the first block (from the [S_x, [S_z, V_x]] commutator)
+    term1 = (A2 - A1) / p.ω1 + A1 / p.ω2
+    
+    # Calculate the second block (from the [S_x, [S_x, V_z]] commutator)
+    term2 = -0.5 * (A1 * (2 * A2 - A1) + B1 * (2 * B2 + B1))
+    
+    # Total coefficient for the (a1^2 a2_dag + a1_dag^2 a2) * σ_z interaction
+    C_z = prefactor * (term1 + term2)
+    
+    return sqrt(2.0)*C_z/3.0
 end
