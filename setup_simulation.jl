@@ -15,10 +15,10 @@ function prepare_simulation(params::SystemParams, H_fun, find_resonance = true, 
     is_qubit = ( H_fun == H_qubit)
     is_3rd_order = (H_fun == H_eff_3rd_order)
     is_ideal = (H_fun == H_ideal)
-
+    is_ideal_t = (H_fun == H_ideal_time)
 
     # 1. Find optimal frequencies
-    if find_resonance && !is_ideal
+    if find_resonance && !is_ideal && !is_ideal_t
             results = get_optimal_frequency(H_fun, params)
             println("Optimal ω2 = ", round(results[1], digits=6))
             println("ω2 dressed = ", round(results[2], digits=6))
@@ -31,10 +31,10 @@ function prepare_simulation(params::SystemParams, H_fun, find_resonance = true, 
 
 
     # 2. Build H_drive_op and field_op
-    if is_ideal
+    if is_ideal || is_ideal_t
         println("Step 1: Ideal model")
         H_drive_op = params.F *(a2 + a2')
-        H += H_drive_op
+        c_ops = [sqrt(params.k2) * a2, sqrt(params.k1) * a1]
     elseif is_effective_model
         println("Step 1: Effective or RWA or qubit or RWA-qubit model")
         S = SW_generator(params)
@@ -59,30 +59,48 @@ function prepare_simulation(params::SystemParams, H_fun, find_resonance = true, 
     else
         println("Step 1: Full model")
         field_op = 1im * sqrt(params.k2 / params.ω2) * (a2 - a2')
+        field_op1 = 1im * sqrt(params.k1 / params.ω1) * (a1 - a1')
         H_drive_op = 1im * params.F * (a2 - a2')
     end
 
-
+    drive_func(p, t) = cos(params.ωd * t)
 
     # 3. Build Liouvillian and initial state
-    if is_ideal
+    if is_ideal || is_ideal_t
         println("Step 2: Ideal model")
-        c_ops = [sqrt(params.k2) * a2, sqrt(params.k1) * a1]
-        println("Generating Liouvillian...")
-        L_cpu = liouvillian(H, c_ops; matrix_form = matrix_form)
+        if is_ideal
+                H += H_drive_op
+                L_cpu = liouvillian(H, c_ops; matrix_form = matrix_form)
+                L_tot_gpu = Adapt.adapt(CUSPARSE.CuSparseMatrixCSR, L_cpu)
+        else
+                L_drive_cpu = liouvillian(H_drive_op; matrix_form = matrix_form)
+                L_drive_gpu = Adapt.adapt(CUSPARSE.CuSparseMatrixCSR, L_drive_cpu)
+                L_cpu = liouvillian(H, c_ops; matrix_form = matrix_form)
+                L_gpu = Adapt.adapt(CUSPARSE.CuSparseMatrixCSR, L_cpu)
+                
+                L_tot_gpu = (L_gpu, (L_drive_gpu, drive_func))
+        end
+
         V_mat = Matrix{ComplexF64}(I, size(H.data, 1), size(H.data, 2))
-        L_cpu_concrete = liouvillian(H, c_ops; matrix_form = Val(false))
         println("Transferring Liouvillian to GPU...")
-        L_tot_gpu = Adapt.adapt(CUSPARSE.CuSparseMatrixCSR, L_cpu)
+        
         psi0_dressed = fock(N1*N2*Np*Nq, 0; dims = dims_sys)
         rho0_dressed_gpu = cu(ket2dm(psi0_dressed))
     else
         println("Step 2: Full or Effective or RWA or qubit or RWA-qubit model")
-        T_baths = (0.0,)
-        fields = (field_op,) 
+        T_baths = (0.0,0.0)
+        fields = (field_op,field_op1) 
         println("Generating Liouvillian...")
         _ , v_d, L_cpu = liouvillian_dressed_nonsecular(H, fields, T_baths; matrix_form = matrix_form)
         V_mat = Array(v_d.data)
+
+        σz_dressed_dense = V_mat' * Array(σz.data) * V_mat
+        σz_dressed_diag = Diagonal(σz_dressed_dense)
+        σz_dressed_qobj = QuantumObject(sparse(σz_dressed_diag), type=Operator(), dims=dims_sys)
+        c_ops_ϕ = [sqrt(params.kϕ) * σz_dressed_qobj]
+        L_ϕ = liouvillian(0 * H, c_ops_ϕ; matrix_form = matrix_form)
+        L_cpu = L_cpu + L_ϕ
+
         println("Transferring Liouvillian to GPU...")
         L_gpu = Adapt.adapt(CUSPARSE.CuSparseMatrixCSR, L_cpu)
 
@@ -102,19 +120,18 @@ function prepare_simulation(params::SystemParams, H_fun, find_resonance = true, 
             L_tot_gpu = L_gpu + L_drive_dressed_gpu
         else
             println("Step 2: Time dependent model (Full or Effective or qubit)")
-            drive_func(p, t) = cos(params.ωd * t)
             L_tot_gpu = (L_gpu, (L_drive_dressed_gpu, drive_func))
         end
     end
 
-    return L_cpu, L_drive_dressed_cpu, L_tot_gpu, rho0_dressed_gpu, V_mat, params, is_RWA, is_RWA_qubit
+    return L_cpu, L_tot_gpu, rho0_dressed_gpu, V_mat, params, is_RWA, is_RWA_qubit
 end
 
 function run_simulation(params::SystemParams, H_fun, filename, tmax, t_selected, nframes, save_dir, find_resonance = true, numerical_RWA = false)
 
     matrix_form = Val(true)
     mkpath(save_dir)
-    L_cpu, _, L_tot_gpu, rho0_dressed_gpu, V_mat, params, is_RWA, is_RWA_qubit = prepare_simulation(params::SystemParams, H_fun, find_resonance, matrix_form, numerical_RWA)
+    L_cpu, L_tot_gpu, rho0_dressed_gpu, V_mat, params, is_RWA, is_RWA_qubit = prepare_simulation(params::SystemParams, H_fun, find_resonance, matrix_form, numerical_RWA)
 
     # 4. Time Evolution
     println("Time evolution on GPU...")
